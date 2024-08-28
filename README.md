@@ -17,6 +17,8 @@ It is not intended to be a full-featured VPN server, but rather an exploration o
  - [Whitepaper](https://www.wireguard.com/papers/wireguard.pdf)
  - [Reference implementation in Go](https://github.com/WireGuard/wireguard-go)
  - [HMAC-based Extract-and-Expand Key Derivation Function (HKDF)](https://datatracker.ietf.org/doc/html/rfc5869)
+ - [Clamping](https://neilmadden.blog/2020/05/28/whats-the-curve25519-clamping-all-about)
+
 
 ## Build instructions
 
