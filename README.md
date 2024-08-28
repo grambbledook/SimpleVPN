@@ -7,7 +7,16 @@ It is not intended to be a full-featured VPN server, but rather an exploration o
 
 ## Supported Protocols
 
-- [ ] WireGuard - see [whitepaper](https://www.wireguard.com/papers/wireguard.pdf) for details 
+- [ ] WireGuard 
+
+
+## Useful links:
+
+### Wireguard
+ 
+ - [Whitepaper](https://www.wireguard.com/papers/wireguard.pdf)
+ - [Reference implementation in Go](https://github.com/WireGuard/wireguard-go)
+ - [HMAC-based Extract-and-Expand Key Derivation Function (HKDF)](https://datatracker.ietf.org/doc/html/rfc5869)
 
 ## Build instructions
 
