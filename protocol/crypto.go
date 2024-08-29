@@ -33,7 +33,7 @@ func KDF1(t0 *[blake2s.Size]byte, key, input []byte) {
 	HMAC1(t0, t0[:], []byte{0x1})
 }
 
-func NewPrivateKey() (sk NoisePrivateKey) {
+func NewPrivateKey() (sk PrivateKey) {
 	rand.Read(sk[:])
 	sk.clamp()
 
@@ -42,15 +42,23 @@ func NewPrivateKey() (sk NoisePrivateKey) {
 
 // Decent explanation of why
 // https://neilmadden.blog/2020/05/28/whats-the-curve25519-clamping-all-about
-func (sk *NoisePrivateKey) clamp() {
+func (sk *PrivateKey) clamp() {
 	sk[0] &= 248
 	sk[31] = (sk[31] & 127) | 64
 }
 
-func (sk *NoisePrivateKey) publicKey() (pk NoisePublicKey) {
+func (sk *PrivateKey) publicKey() (pk PublicKey) {
 	apk := (*[PublicKeySize]byte)(&pk)
 	ask := (*[PrivateKeySize]byte)(sk)
 
 	curve25519.ScalarBaseMult(apk, ask)
 	return
+}
+
+func (sk *PrivateKey) SharedSecret(pub PublicKey) (ss PublicKey, err error) {
+	apk := (*[PublicKeySize]byte)(&pub)
+	ask := (*[PrivateKeySize]byte)(sk)
+
+	ss2, err2 := curve25519.X25519(ask[:], apk[:])
+	return PublicKey(ss2), err2
 }

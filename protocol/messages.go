@@ -11,19 +11,17 @@ import (
 const (
 	UIntSize = 4
 
+	ReservedSpaceSize   = 3
 	PublicKeySize       = 32
 	PrivateKeySize      = 32
 	Tai64nTimestampSIze = 12
 )
 
 type (
-	Spacer          [3]byte
-	NoisePublicKey  [PublicKeySize]byte
-	NoisePrivateKey [PrivateKeySize]byte
+	ReservedSpace [ReservedSpaceSize]byte
+	PublicKey     [PublicKeySize]byte
+	PrivateKey    [PrivateKeySize]byte
 )
-
-type PublicKey struct {
-}
 
 const (
 	InitiateHandshakeMessageSize         = 148
@@ -32,9 +30,9 @@ const (
 
 type InitiateHandshakeMessage struct {
 	Type      byte
-	Reserved  Spacer
+	Reserved  ReservedSpace
 	Sender    uint32
-	Ephemeral NoisePublicKey
+	Ephemeral PublicKey
 	Static    [PublicKeySize + poly1305.TagSize]byte
 	Timestamp [Tai64nTimestampSIze + poly1305.TagSize]byte
 	MAC1      [blake2s.Size128]byte
@@ -43,10 +41,10 @@ type InitiateHandshakeMessage struct {
 
 type InitiateHandshakeResponseMessage struct {
 	Type      byte
-	Reserved  Spacer
+	Reserved  ReservedSpace
 	Sender    uint32
 	Receiver  uint32
-	Ephemeral NoisePublicKey
+	Ephemeral PublicKey
 	Empty     [poly1305.TagSize]byte
 	MAC1      [blake2s.Size128]byte
 	MAC2      [blake2s.Size128]byte
@@ -55,7 +53,16 @@ type InitiateHandshakeResponseMessage struct {
 func (m *InitiateHandshakeMessage) ToBytes() []byte {
 	var buffer [InitiateHandshakeMessageSize]byte
 
-	writer := bytes.NewBuffer(buffer[:0])
+	writer := bytes.NewBuffer(buffer[:])
+	binary.Write(writer, binary.LittleEndian, m)
+
+	return writer.Bytes()
+}
+
+func (m *InitiateHandshakeResponseMessage) ToBytes() []byte {
+	var buffer [InitiateHandshakeResponseMessageSize]byte
+
+	writer := bytes.NewBuffer(buffer[:])
 	binary.Write(writer, binary.LittleEndian, m)
 
 	return writer.Bytes()
@@ -71,7 +78,7 @@ func FromBytes(data []byte) (InitiateHandshakeMessage, error) {
 	sender := binary.LittleEndian.Uint32(data[l:r])
 
 	l, r = r, r+PrivateKeySize
-	ephimeral := NoisePublicKey(data[l:r])
+	ephimeral := PublicKey(data[l:r])
 
 	l, r = r, r+PublicKeySize+poly1305.TagSize
 	static := [PublicKeySize + poly1305.TagSize]byte(data[l:r])
