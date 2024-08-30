@@ -8,3 +8,6 @@
 /dataSources.local.xml
 
 .idea/
+/modules.xml
+/SimpleVPN.iml
+/vcs.xml
