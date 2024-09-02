@@ -14,18 +14,25 @@ const (
 	ReservedSpaceSize   = 3
 	PublicKeySize       = 32
 	PrivateKeySize      = 32
+	SharedSecretSize    = 32
 	Tai64nTimestampSIze = 12
 )
 
 type (
 	ReservedSpace [ReservedSpaceSize]byte
 	PublicKey     [PublicKeySize]byte
+	SharedSecret  [SharedSecretSize]byte
 	PrivateKey    [PrivateKeySize]byte
 )
 
 const (
 	InitiateHandshakeMessageSize         = 148
 	InitiateHandshakeResponseMessageSize = 92
+)
+
+const (
+	InitiateHandshakeMessageType         = 0x01
+	InitiateHandshakeResponseMessageType = 0x02
 )
 
 type InitiateHandshakeMessage struct {
