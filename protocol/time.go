@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"bytes"
 	"encoding/binary"
 	"time"
 )
@@ -11,6 +12,10 @@ const (
 )
 
 type Tai64n [TimestampSIze]byte
+
+func (n Tai64n) After(timestamp Tai64n) bool {
+	return bytes.Compare(n[:], timestamp[:]) > 0
+}
 
 func Now(t time.Time) (ts Tai64n) {
 	now := t.Unix()

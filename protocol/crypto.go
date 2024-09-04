@@ -19,7 +19,7 @@ import (
 // msg.empty := Aead(κ,0,ϵ,Hr)
 // Hr := Hash(Hr ∥ msg.empty)
 
-func HASH(input ...[]byte) (sum [blake2s.Size]byte) {
+func HASH(sum *[blake2s.Size]byte, input ...[]byte) {
 	h, _ := blake2s.New256(nil)
 	for _, data := range input {
 		h.Write(data)
@@ -28,6 +28,16 @@ func HASH(input ...[]byte) (sum [blake2s.Size]byte) {
 	return
 }
 
+// HKDFExtract
+// HKDF-Extract(salt, IKM) -> PRK
+//
+//	Inputs:
+//	   salt     optional salt value (a non-secret random value);
+//	            if not provided, it is set to a string of HashLen zeros.
+//	   IKM      input keying material
+//
+//	Output:
+//	   PRK      a pseudorandom key (of HashLen octets)
 func HKDFExtract(sum *[blake2s.Size]byte, key, input []byte) {
 	mac := hmac.New(func() hash.Hash {
 		h, _ := blake2s.New256(nil)
@@ -37,31 +47,7 @@ func HKDFExtract(sum *[blake2s.Size]byte, key, input []byte) {
 	mac.Sum(sum[:0])
 }
 
-func HKDFExpand(sum *[blake2s.Size]byte, key, info, input []byte) {
-	mac := hmac.New(func() hash.Hash {
-		h, _ := blake2s.New256(nil)
-		return h
-	}, key)
-	mac.Write(input)
-	mac.Write(info)
-	mac.Sum(sum[:0])
-}
-
-func KDF1(t0 *[blake2s.Size]byte, key, input []byte) {
-	// Extract. set t0 = HMAC-Hash(key, input), i.e. compute PRK
-	HKDFExtract(t0, key, input)
-	HKDFExpand(t0, t0[:], []byte{}, []byte{0x1})
-}
-
-// KDF2 HKDF-Extract(salt, IKM) -> PRK
-//
-//	Inputs:
-//	   salt     optional salt value (a non-secret random value);
-//	            if not provided, it is set to a string of HashLen zeros.
-//	   IKM      input keying material
-//
-//	Output:
-//	   PRK      a pseudorandom key (of HashLen octets)
+// HKDFExpand
 //
 // HKDF-Expand(PRK, info, L) -> OKM
 //
@@ -78,7 +64,32 @@ func KDF1(t0 *[blake2s.Size]byte, key, input []byte) {
 //	   OKM      output keying material (of L octets)
 //
 //	The output OKM is calculated as follows:
+func HKDFExpand(sum *[blake2s.Size]byte, key, info, input []byte) {
+	mac := hmac.New(func() hash.Hash {
+		h, _ := blake2s.New256(nil)
+		return h
+	}, key)
+	mac.Write(input)
+	mac.Write(info)
+	mac.Sum(sum[:0])
+}
+
+//	N = ceil(L/HashLen)
+//	T = T(1) | T(2) | T(3) | ... | T(N)
+//	OKM = first L octets of T
 //
+// where:
+//
+//	T(0) = empty string (zero length)
+//	T(1) = HMAC-Hash(PRK, T(0) | info | 0x01)
+//	T(2) = HMAC-Hash(PRK, T(1) | info | 0x02)
+//	T(3) = HMAC-Hash(PRK, T(2) | info | 0x03)
+func KDF1(t0 *[blake2s.Size]byte, key, input []byte) {
+	// Extract. set t0 = HMAC-Hash(key, input), i.e. compute PRK
+	HKDFExtract(t0, key, input)
+	HKDFExpand(t0, t0[:], []byte{}, []byte{0x1})
+}
+
 //	N = ceil(L/HashLen)
 //	T = T(1) | T(2) | T(3) | ... | T(N)
 //	OKM = first L octets of T
@@ -96,6 +107,26 @@ func KDF2(t0, t1 *[blake2s.Size]byte, key, input []byte) {
 
 	HKDFExpand(t0, prk[:], []byte{}, []byte{0x1})
 	HKDFExpand(t1, prk[:], t0[:], []byte{0x2})
+}
+
+//	N = ceil(L/HashLen)
+//	T = T(1) | T(2) | T(3) | ... | T(N)
+//	OKM = first L octets of T
+//
+// where:
+//
+//	T(0) = empty string (zero length)
+//	T(1) = HMAC-Hash(PRK, T(0) | info | 0x01)
+//	T(2) = HMAC-Hash(PRK, T(1) | info | 0x02)
+//	T(3) = HMAC-Hash(PRK, T(2) | info | 0x03)
+func KDF3(t0, t1, t2 *[blake2s.Size]byte, key, input []byte) {
+	// Extract. Compute PRK
+	var prk [blake2s.Size]byte
+	HKDFExtract(&prk, key, input)
+
+	HKDFExpand(t0, prk[:], []byte{}, []byte{0x1})
+	HKDFExpand(t1, prk[:], t0[:], []byte{0x2})
+	HKDFExpand(t2, prk[:], t1[:], []byte{0x3})
 }
 
 func DHGenerate() (sk PrivateKey, pk PublicKey) {
