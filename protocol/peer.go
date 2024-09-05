@@ -24,7 +24,7 @@ func (t *Tunnel) ProcessInitiateHandshakeResponseMessage(ch InitiateHandshakeRes
 }
 
 type Handshake struct {
-	Chain                   [blake2s.Size]byte
+	ChainKey                [blake2s.Size]byte
 	Hash                    [blake2s.Size]byte
 	LocalEphemeralSecret    PrivateKey
 	LocalEphemeralPublic    PublicKey

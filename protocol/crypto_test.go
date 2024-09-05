@@ -46,11 +46,11 @@ func Test_Handshake(t *testing.T) {
 	}
 
 	responder := Tunnel{
-		Local: Peer{
+		Remote: Peer{
 			PrivateKey: initiator_pk,
 			PublicKey:  initiator_pk.PublicKey(),
 		},
-		Remote: Peer{
+		Local: Peer{
 			PrivateKey: responder_pk,
 			PublicKey:  responder_pk.PublicKey(),
 		},
@@ -71,8 +71,8 @@ func Test_Handshake(t *testing.T) {
 
 	assertEquals(
 		t, "chainKey after initiation",
-		initiator.Handshake.Chain[:],
-		responder.Handshake.Chain[:],
+		initiator.Handshake.ChainKey[:],
+		responder.Handshake.ChainKey[:],
 	)
 	assertEquals(
 		t, "hash after initiation",
