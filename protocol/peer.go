@@ -19,10 +19,6 @@ type Tunnel struct {
 	Handshake Handshake
 }
 
-func (t *Tunnel) ProcessInitiateHandshakeResponseMessage(ch InitiateHandshakeResponseMessage) interface{} {
-	return nil
-}
-
 type Handshake struct {
 	ChainKey                [blake2s.Size]byte
 	Hash                    [blake2s.Size]byte

@@ -13,17 +13,10 @@ const (
 )
 
 var (
-	// InitialKeyChain - Initial keychain
 	InitialKeyChain [blake2s.Size]byte
-
-	// InitialHash - Initial hash
-	InitialHash [blake2s.Size]byte
-
-	// ZeroNonce Empty nonce
-	ZeroNonce [chacha20poly1305.NonceSize]byte
-
-	// PreSharedKey - Pre-shared key
-	PreSharedKey = [SharedSecretSize]byte{}
+	InitialHash     [blake2s.Size]byte
+	ZeroNonce       [chacha20poly1305.NonceSize]byte
+	PreSharedKey    = [SharedSecretSize]byte{}
 )
 
 func init() {
@@ -85,8 +78,6 @@ func (t *Tunnel) InitiateHandshake() (InitiateHandshakeMessage, error) {
 }
 
 func (t *Tunnel) ProcessInitiateHandshakeMessage(message InitiateHandshakeMessage) error {
-	t.Handshake.InitiatorIndex = message.Sender
-	t.Handshake.RemoteEphemeralPublic = message.Ephemeral
 
 	hash := [blake2s.Size]byte{}
 	chainKey := [chacha20poly1305.KeySize]byte{}
@@ -95,13 +86,13 @@ func (t *Tunnel) ProcessInitiateHandshakeMessage(message InitiateHandshakeMessag
 	HASH(&hash, InitialHash[:], t.Local.PublicKey[:])
 
 	// 1-C C := KDF1(C,Epubi)
-	KDF1(&chainKey, InitialKeyChain[:], t.Handshake.RemoteEphemeralPublic[:])
+	KDF1(&chainKey, InitialKeyChain[:], message.Ephemeral[:])
 
 	// 2-H H := HASH(H || Epubi)
-	HASH(&hash, hash[:], t.Handshake.RemoteEphemeralPublic[:])
+	HASH(&hash, hash[:], message.Ephemeral[:])
 
 	// se := DH(Sprivr, Epubi)
-	ss, err := t.Local.PrivateKey.SharedSecret(t.Handshake.RemoteEphemeralPublic)
+	ss, err := t.Local.PrivateKey.SharedSecret(message.Ephemeral)
 	if err != nil {
 		return err
 	}
@@ -146,39 +137,99 @@ func (t *Tunnel) ProcessInitiateHandshakeMessage(message InitiateHandshakeMessag
 	t.Handshake.LastTimestamp = ts
 	t.Handshake.Hash = hash
 	t.Handshake.ChainKey = chainKey
+
+	t.Handshake.InitiatorIndex = message.Sender
+	t.Handshake.RemoteEphemeralPublic = message.Ephemeral
 	return nil
 }
 
 func (t *Tunnel) CreateInitiateHandshakeResponse() (InitiateHandshakeResponseMessage, error) {
 	remote := t.Remote
 
+	hash := [blake2s.Size]byte{}
+	chainKey := [chacha20poly1305.KeySize]byte{}
+
 	t.Handshake.LocalEphemeralSecret, t.Handshake.LocalEphemeralPublic = DHGenerate()
-	KDF1(&t.Handshake.ChainKey, t.Handshake.ChainKey[:], t.Handshake.RemoteEphemeralPublic[:])
-	HASH(&t.Handshake.Hash, t.Handshake.Hash[:], t.Handshake.RemoteEphemeralPublic[:])
+
 	message := InitiateHandshakeResponseMessage{
 		Ephemeral: t.Handshake.LocalEphemeralPublic,
 	}
+
+	HASH(&hash, t.Handshake.Hash[:], message.Ephemeral[:])
+	KDF1(&chainKey, t.Handshake.ChainKey[:], message.Ephemeral[:])
 
 	ss, err := t.Handshake.LocalEphemeralSecret.SharedSecret(t.Handshake.RemoteEphemeralPublic)
 	if err != nil {
 		return InitiateHandshakeResponseMessage{}, err
 	}
-	KDF1(&t.Handshake.ChainKey, t.Handshake.ChainKey[:], ss[:])
+	KDF1(&chainKey, chainKey[:], ss[:])
 
 	ss, err = t.Handshake.LocalEphemeralSecret.SharedSecret(remote.PublicKey)
 	if err != nil {
 		return InitiateHandshakeResponseMessage{}, err
 	}
-	KDF1(&t.Handshake.ChainKey, t.Handshake.ChainKey[:], ss[:])
+	KDF1(&chainKey, chainKey[:], ss[:])
 
 	tau := [blake2s.Size]byte{}
 	key := [chacha20poly1305.KeySize]byte{}
-	KDF3(&t.Handshake.ChainKey, &tau, &key, t.Handshake.ChainKey[:], PreSharedKey[:])
+	KDF3(&chainKey, &tau, &key, chainKey[:], PreSharedKey[:])
 
-	HASH(&t.Handshake.Hash, t.Handshake.Hash[:], tau[:])
+	HASH(&hash, hash[:], tau[:])
 	aead, _ := chacha20poly1305.New(key[:])
-	aead.Seal(message.Empty[:0], ZeroNonce[:], nil, t.Handshake.Hash[:])
+	aead.Seal(message.Empty[:0], ZeroNonce[:], nil, hash[:])
 
-	HASH(&t.Handshake.Hash, t.Handshake.Hash[:], message.Empty[:])
+	HASH(&hash, hash[:], message.Empty[:])
+
+	t.Handshake.Hash = hash
+	t.Handshake.ChainKey = chainKey
 	return message, nil
+}
+
+func (t *Tunnel) ProcessInitiateHandshakeResponseMessage(message InitiateHandshakeResponseMessage) interface{} {
+	local, _ := t.Local, t.Remote
+
+	hash := [blake2s.Size]byte{}
+	chainKey := [chacha20poly1305.KeySize]byte{}
+
+	// 1-C C := KDF1(C,Epubr)
+	KDF1(&chainKey, t.Handshake.ChainKey[:], message.Ephemeral[:])
+
+	// 1-H H := HASH(H || Epubr)
+	HASH(&hash, t.Handshake.Hash[:], message.Ephemeral[:])
+
+	ss, err := t.Handshake.LocalEphemeralSecret.SharedSecret(message.Ephemeral)
+	if err != nil {
+		return err
+	}
+	// 2-C C, k := KDF2(C,DH(Eprivi, Epubr))
+	KDF1(&chainKey, chainKey[:], ss[:])
+
+	ss, err = local.PrivateKey.SharedSecret(message.Ephemeral)
+	if err != nil {
+		return err
+	}
+	// 3-C C, k := KDF2(C,DH(Eprivi, Spubr))
+	KDF1(&chainKey, chainKey[:], ss[:])
+
+	tau := [blake2s.Size]byte{}
+	key := [chacha20poly1305.KeySize]byte{}
+	// 4-C C, tau, k := KDF3(C, Q)
+	KDF3(&chainKey, &tau, &key, chainKey[:], PreSharedKey[:])
+
+	// 2-H H := HASH(H || tau)
+	HASH(&hash, hash[:], tau[:])
+
+	aead, _ := chacha20poly1305.New(key[:])
+	_, err = aead.Open(nil, ZeroNonce[:], message.Empty[:], hash[:])
+	if err != nil {
+		return errors.New("failed to open the msg.empty field")
+	}
+
+	HASH(&hash, hash[:], message.Empty[:])
+
+	t.Handshake.Hash = hash
+	t.Handshake.ChainKey = chainKey
+	t.Handshake.RemoteEphemeralPublic = message.Ephemeral
+
+	return nil
 }
