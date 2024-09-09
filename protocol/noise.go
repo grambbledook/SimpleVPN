@@ -24,6 +24,12 @@ func init() {
 	HASH(&InitialHash, InitialKeyChain[:], []byte(IDENTIFIER))
 }
 
+func setZeroes(b []byte) {
+	for i := range b {
+		b[i] = 0
+	}
+}
+
 func (t *Tunnel) initialise() {
 	t.Handshake.PrecomputedStaticStatic, _ = t.Local.PrivateKey.SharedSecret(t.Remote.PublicKey)
 }
@@ -74,6 +80,7 @@ func (t *Tunnel) InitiateHandshake() (InitiateHandshakeMessage, error) {
 
 	// 4-H H = HASH(H || msg.Timestamp)
 	HASH(&t.Handshake.Hash, t.Handshake.Hash[:], message.Timestamp[:])
+	t.Handshake.Status = InitiateHandshakeMessageSent
 	return message, nil
 }
 
@@ -140,6 +147,7 @@ func (t *Tunnel) ProcessInitiateHandshakeMessage(message InitiateHandshakeMessag
 
 	t.Handshake.InitiatorIndex = message.Sender
 	t.Handshake.RemoteEphemeralPublic = message.Ephemeral
+	t.Handshake.Status = InitiateHandshakeMessageReceived
 	return nil
 }
 
@@ -182,10 +190,11 @@ func (t *Tunnel) CreateInitiateHandshakeResponse() (InitiateHandshakeResponseMes
 
 	t.Handshake.Hash = hash
 	t.Handshake.ChainKey = chainKey
+	t.Handshake.Status = InitiateHandshakeResponseMessageSent
 	return message, nil
 }
 
-func (t *Tunnel) ProcessInitiateHandshakeResponseMessage(message InitiateHandshakeResponseMessage) interface{} {
+func (t *Tunnel) ProcessInitiateHandshakeResponseMessage(message InitiateHandshakeResponseMessage) error {
 	local, _ := t.Local, t.Remote
 
 	hash := [blake2s.Size]byte{}
@@ -230,6 +239,35 @@ func (t *Tunnel) ProcessInitiateHandshakeResponseMessage(message InitiateHandsha
 	t.Handshake.Hash = hash
 	t.Handshake.ChainKey = chainKey
 	t.Handshake.RemoteEphemeralPublic = message.Ephemeral
+	t.Handshake.Status = InitiateHandshakeResponseMessageReceived
+	return nil
+}
 
+func (t *Tunnel) BeginSymmetricSession() error {
+	send := [chacha20poly1305.KeySize]byte{}
+	receive := [chacha20poly1305.KeySize]byte{}
+
+	if t.Handshake.Status == InitiateHandshakeResponseMessageReceived {
+		KDF2(&send, &receive, t.Handshake.ChainKey[:], nil)
+	} else if t.Handshake.Status == InitiateHandshakeResponseMessageSent {
+		KDF2(&receive, &send, t.Handshake.ChainKey[:], nil)
+	} else {
+		return errors.New("wrong handshake status")
+	}
+
+	setZeroes(t.Handshake.Hash[:])
+	setZeroes(t.Handshake.ChainKey[:])
+	setZeroes(t.Handshake.LocalEphemeralSecret[:])
+	setZeroes(t.Handshake.LocalEphemeralPublic[:])
+	setZeroes(t.Handshake.RemoteEphemeralPublic[:])
+
+	t.Keypair = Keypair{}
+	t.Keypair.SendKey, _ = chacha20poly1305.New(send[:])
+	t.Keypair.ReceiveKey, _ = chacha20poly1305.New(receive[:])
+	t.Nonce = 0
+
+	t.Handshake.Status = Completed
+
+	// Don't forget to keep track of prev keys to handle refreshes and reconnects.
 	return nil
 }

@@ -1,11 +1,17 @@
 package protocol
 
-import "golang.org/x/crypto/blake2s"
+import (
+	"crypto/cipher"
+	"golang.org/x/crypto/blake2s"
+)
 
 const (
-	Created                              = iota
-	InitiateHandshakeMessageSent         = iota
-	InitiateHandshakeResponseMessageSent = iota
+	Created                                  = iota
+	InitiateHandshakeMessageSent             = iota
+	InitiateHandshakeMessageReceived         = iota
+	InitiateHandshakeResponseMessageSent     = iota
+	InitiateHandshakeResponseMessageReceived = iota
+	Completed                                = iota
 )
 
 type Peer struct {
@@ -17,6 +23,8 @@ type Tunnel struct {
 	Local     Peer
 	Remote    Peer
 	Handshake Handshake
+	Keypair   Keypair
+	Nonce     uint64
 }
 
 type Handshake struct {
@@ -30,4 +38,9 @@ type Handshake struct {
 	InitiatorIndex          uint32
 	PrecomputedStaticStatic SharedSecret
 	LastTimestamp           Tai64n
+}
+
+type Keypair struct {
+	SendKey    cipher.AEAD
+	ReceiveKey cipher.AEAD
 }
