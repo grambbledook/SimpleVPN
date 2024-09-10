@@ -1,29 +1,30 @@
 package protocol
 
 import (
+	"bytes"
 	"testing"
 )
 
 func Test_ECDH(t *testing.T) {
-	a_pk := NewPrivateKey()
-	b_pk := NewPrivateKey()
+	aliceSK := NewPrivateKey()
+	bobsSK := NewPrivateKey()
 
-	t.Log("A's PK", a_pk)
-	t.Log("B's PK", b_pk)
+	t.Log("A's PK", aliceSK)
+	t.Log("B's PK", bobsSK)
 
-	a_pub := a_pk.PublicKey()
-	b_pub := b_pk.PublicKey()
+	alicePK := aliceSK.PublicKey()
+	bobsPK := bobsSK.PublicKey()
 
-	t.Log("A's PK", a_pub)
-	t.Log("B's PK", b_pub)
+	t.Log("A's PK", alicePK)
+	t.Log("B's PK", bobsPK)
 
-	k_a, _ := a_pk.SharedSecret(b_pub)
-	k_b, _ := b_pk.SharedSecret(a_pub)
+	aliceSS, _ := aliceSK.SharedSecret(bobsPK)
+	bobsSS, _ := bobsSK.SharedSecret(alicePK)
 
-	t.Log("A's SS", k_a)
-	t.Log("B's SS", k_b)
+	t.Log("A's SS", aliceSS)
+	t.Log("B's SS", bobsSS)
 
-	if k_a != k_b {
+	if !bytes.Equal(aliceSS[:], bobsSS[:]) {
 		t.Fatal("Shared secrets do not match")
 	}
 }

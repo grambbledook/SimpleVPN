@@ -33,18 +33,19 @@ func Test_Handshake(t *testing.T) {
 	}
 
 	t.Logf("Pre-compute static-static shared secret")
-
-	initiator.initialise()
-	responder.initialise()
-
-	assertEquals(
-		t, "precomputedStaticStatic",
-		initiator.Handshake.PrecomputedStaticStatic[:],
-		responder.Handshake.PrecomputedStaticStatic[:],
-	)
-
 	{
-		t.Log("Initiate handshake stage")
+		initiator.initialise()
+		responder.initialise()
+
+		assertEquals(
+			t, "precomputedStaticStatic",
+			initiator.Handshake.PrecomputedStaticStatic[:],
+			responder.Handshake.PrecomputedStaticStatic[:],
+		)
+	}
+
+	t.Log("Initiate Handshake stage")
+	{
 
 		ih, _ := initiator.InitiateHandshake()
 		err := responder.ProcessInitiateHandshakeMessage(ih)
@@ -62,8 +63,8 @@ func Test_Handshake(t *testing.T) {
 		)
 	}
 
+	t.Log("Complete Handshake stage")
 	{
-		t.Log("Respond handshake stage")
 
 		ch, _ := responder.CreateInitiateHandshakeResponse()
 		err := initiator.ProcessInitiateHandshakeResponseMessage(ch)
@@ -81,8 +82,8 @@ func Test_Handshake(t *testing.T) {
 		)
 	}
 
+	t.Log("Compute transport keys")
 	{
-		t.Log("Compute transport keys")
 
 		err := initiator.BeginSymmetricSession()
 		assertNil(t, "Unable to derive transport keys for initiator", err)
@@ -90,8 +91,9 @@ func Test_Handshake(t *testing.T) {
 		err = responder.BeginSymmetricSession()
 		assertNil(t, "Unable to derive transport keys for responder", err)
 	}
+
+	t.Log("Test transport keys for i-r communication")
 	{
-		t.Log("Test transport keys for i-r communication")
 
 		var sealed []byte
 		testData := []byte("hello world")
@@ -102,8 +104,8 @@ func Test_Handshake(t *testing.T) {
 		assertEquals(t, "decrypted data", testData, decrypted)
 	}
 
+	t.Log("Test transport keys for r-i communication")
 	{
-		t.Log("Test transport keys for r-i communication")
 
 		var sealed []byte
 		testData := []byte("hello world")

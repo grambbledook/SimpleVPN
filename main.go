@@ -64,6 +64,7 @@ func main() {
 
 	buffer := make([]byte, 1024)
 	for {
+
 		n, remoteAddr, err := bind.ReadFromUDP(buffer)
 		if err != nil {
 			fmt.Println("Error reading from UDP", err)
@@ -71,35 +72,26 @@ func main() {
 		}
 		fmt.Println("Received", n, "bytes from", remoteAddr)
 
-		if buffer[0] == protocol.InitiateHandshakeMessageType {
-			message, err := protocol.FromBytes(buffer)
-			if err != nil {
-				fmt.Println("  Error occurred on message parsing", err)
+		if buffer[0] == protocol.HandshakeInitType {
+
+			var message protocol.MessageHandshakeInit
+			if err := message.FromBytes(buffer); err != nil {
+				fmt.Println("  Can't parse a message of type [HandshakeInit]", err)
 				continue
 			}
 
 			fmt.Println("  Type", message.Type, "Sender", message.Sender, "ephemeral", message.Ephemeral, "static", message.Static, "ts", message.Timestamp)
 
-			err = tunnel.ProcessInitiateHandshakeMessage(message)
-			if err != nil {
-				fmt.Println("  Error occurred on ih message processing", err)
+			if err := tunnel.ProcessInitiateHandshakeMessage(message); err != nil {
+				fmt.Println("  Error occurred on [HandshakeInit] message processing", err)
 				continue
 			}
 
-			response, err := tunnel.CreateInitiateHandshakeResponse()
-			if err != nil {
-				fmt.Println("  Error occurred on ih response creation", err)
-				continue
+			if response, err := tunnel.CreateInitiateHandshakeResponse(); err != nil {
+				fmt.Println("  Error occurred creating Handshake response", err)
+			} else if _, err = bind.WriteToUDP(response.ToBytes(), &peer); err != nil {
+				fmt.Println("  Error occurred on sending Handshake response", err)
 			}
-
-			_, err = bind.WriteToUDP(response.ToBytes(), &peer)
-			if err != nil {
-				fmt.Println("  Error occurred on ih response sending", err)
-				continue
-			}
-
 		}
-
-		//Must(bind.WriteToUDP(make([]byte, 120), &peer))
 	}
 }

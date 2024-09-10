@@ -34,7 +34,7 @@ func (t *Tunnel) initialise() {
 	t.Handshake.PrecomputedStaticStatic, _ = t.Local.PrivateKey.SharedSecret(t.Remote.PublicKey)
 }
 
-func (t *Tunnel) InitiateHandshake() (InitiateHandshakeMessage, error) {
+func (t *Tunnel) InitiateHandshake() (MessageHandshakeInit, error) {
 	local, remote := t.Local, t.Remote
 	// 1-H H := HASH(C || Spubr)
 	HASH(&t.Handshake.Hash, InitialHash[:], remote.PublicKey[:])
@@ -45,18 +45,18 @@ func (t *Tunnel) InitiateHandshake() (InitiateHandshakeMessage, error) {
 	// 2-H H := HASH(H || Epubi)
 	HASH(&t.Handshake.Hash, t.Handshake.Hash[:], t.Handshake.LocalEphemeralPublic[:])
 
-	message := InitiateHandshakeMessage{
-		Type:      InitiateHandshakeMessageType,
+	message := MessageHandshakeInit{
+		Type:      HandshakeInitType,
 		Ephemeral: t.Handshake.LocalEphemeralPublic,
 	}
 
 	// es := DH(Eprivi, Spubr)
 	ss, err := t.Handshake.LocalEphemeralSecret.SharedSecret(remote.PublicKey)
 	if err != nil {
-		return InitiateHandshakeMessage{}, err
+		return MessageHandshakeInit{}, err
 	}
 
-	key := [chacha20poly1305.KeySize]byte{}
+	var key [chacha20poly1305.KeySize]byte
 	// 2-C C, k := KDF2(C,DH(Eprivi, Spubr))
 	KDF2(&t.Handshake.ChainKey, &key, t.Handshake.ChainKey[:], ss[:])
 
@@ -69,7 +69,7 @@ func (t *Tunnel) InitiateHandshake() (InitiateHandshakeMessage, error) {
 	// Handshake.precomputedStaticStatic
 	ss, err = local.PrivateKey.SharedSecret(remote.PublicKey)
 	if err != nil {
-		return InitiateHandshakeMessage{}, err
+		return MessageHandshakeInit{}, err
 	}
 	// 3-C C, k := KDF2(C,DH(Sprivi, Spubr))
 	KDF2(&t.Handshake.ChainKey, &key, t.Handshake.ChainKey[:], ss[:])
@@ -84,10 +84,10 @@ func (t *Tunnel) InitiateHandshake() (InitiateHandshakeMessage, error) {
 	return message, nil
 }
 
-func (t *Tunnel) ProcessInitiateHandshakeMessage(message InitiateHandshakeMessage) error {
+func (t *Tunnel) ProcessInitiateHandshakeMessage(message MessageHandshakeInit) error {
 
-	hash := [blake2s.Size]byte{}
-	chainKey := [chacha20poly1305.KeySize]byte{}
+	var hash [blake2s.Size]byte
+	var chainKey [chacha20poly1305.KeySize]byte
 
 	// 1-H H := HASH(C || Spubr)
 	HASH(&hash, InitialHash[:], t.Local.PublicKey[:])
@@ -104,11 +104,11 @@ func (t *Tunnel) ProcessInitiateHandshakeMessage(message InitiateHandshakeMessag
 		return err
 	}
 
-	key := [chacha20poly1305.KeySize]byte{}
+	var key [chacha20poly1305.KeySize]byte
 	// 2-C C, k := KDF2(C,DH(Sprivr, Epubi))
 	KDF2(&chainKey, &key, chainKey[:], ss[:])
 
-	pk := PublicKey{}
+	var pk PublicKey
 	aead, _ := chacha20poly1305.New(key[:])
 	_, err = aead.Open(pk[:], ZeroNonce[:], message.Static[:], hash[:])
 	if err != nil {
@@ -127,7 +127,7 @@ func (t *Tunnel) ProcessInitiateHandshakeMessage(message InitiateHandshakeMessag
 	// 3-C C, k := KDF2(C,DH(Sprivr, Spubi))
 	KDF2(&chainKey, &key, chainKey[:], ss[:])
 
-	ts := Tai64n{}
+	var ts Tai64n
 	aead, _ = chacha20poly1305.New(key[:])
 	_, err = aead.Open(ts[:], ZeroNonce[:], message.Timestamp[:], hash[:])
 	if err != nil {
@@ -151,15 +151,16 @@ func (t *Tunnel) ProcessInitiateHandshakeMessage(message InitiateHandshakeMessag
 	return nil
 }
 
-func (t *Tunnel) CreateInitiateHandshakeResponse() (InitiateHandshakeResponseMessage, error) {
+func (t *Tunnel) CreateInitiateHandshakeResponse() (MessageHandshakeResponse, error) {
 	remote := t.Remote
 
-	hash := [blake2s.Size]byte{}
-	chainKey := [chacha20poly1305.KeySize]byte{}
+	var hash [blake2s.Size]byte
+	var chainKey [chacha20poly1305.KeySize]byte
 
 	t.Handshake.LocalEphemeralSecret, t.Handshake.LocalEphemeralPublic = DHGenerate()
 
-	message := InitiateHandshakeResponseMessage{
+	message := MessageHandshakeResponse{
+		Type:      HandshakeResponseType,
 		Ephemeral: t.Handshake.LocalEphemeralPublic,
 	}
 
@@ -168,18 +169,18 @@ func (t *Tunnel) CreateInitiateHandshakeResponse() (InitiateHandshakeResponseMes
 
 	ss, err := t.Handshake.LocalEphemeralSecret.SharedSecret(t.Handshake.RemoteEphemeralPublic)
 	if err != nil {
-		return InitiateHandshakeResponseMessage{}, err
+		return MessageHandshakeResponse{}, err
 	}
 	KDF1(&chainKey, chainKey[:], ss[:])
 
 	ss, err = t.Handshake.LocalEphemeralSecret.SharedSecret(remote.PublicKey)
 	if err != nil {
-		return InitiateHandshakeResponseMessage{}, err
+		return MessageHandshakeResponse{}, err
 	}
 	KDF1(&chainKey, chainKey[:], ss[:])
 
-	tau := [blake2s.Size]byte{}
-	key := [chacha20poly1305.KeySize]byte{}
+	var tau [blake2s.Size]byte
+	var key [chacha20poly1305.KeySize]byte
 	KDF3(&chainKey, &tau, &key, chainKey[:], PreSharedKey[:])
 
 	HASH(&hash, hash[:], tau[:])
@@ -194,11 +195,11 @@ func (t *Tunnel) CreateInitiateHandshakeResponse() (InitiateHandshakeResponseMes
 	return message, nil
 }
 
-func (t *Tunnel) ProcessInitiateHandshakeResponseMessage(message InitiateHandshakeResponseMessage) error {
+func (t *Tunnel) ProcessInitiateHandshakeResponseMessage(message MessageHandshakeResponse) error {
 	local, _ := t.Local, t.Remote
 
-	hash := [blake2s.Size]byte{}
-	chainKey := [chacha20poly1305.KeySize]byte{}
+	var hash [blake2s.Size]byte
+	var chainKey [chacha20poly1305.KeySize]byte
 
 	// 1-C C := KDF1(C,Epubr)
 	KDF1(&chainKey, t.Handshake.ChainKey[:], message.Ephemeral[:])
@@ -220,8 +221,8 @@ func (t *Tunnel) ProcessInitiateHandshakeResponseMessage(message InitiateHandsha
 	// 3-C C, k := KDF2(C,DH(Eprivi, Spubr))
 	KDF1(&chainKey, chainKey[:], ss[:])
 
-	tau := [blake2s.Size]byte{}
-	key := [chacha20poly1305.KeySize]byte{}
+	var tau [blake2s.Size]byte
+	var key [chacha20poly1305.KeySize]byte
 	// 4-C C, tau, k := KDF3(C, Q)
 	KDF3(&chainKey, &tau, &key, chainKey[:], PreSharedKey[:])
 
@@ -244,8 +245,8 @@ func (t *Tunnel) ProcessInitiateHandshakeResponseMessage(message InitiateHandsha
 }
 
 func (t *Tunnel) BeginSymmetricSession() error {
-	send := [chacha20poly1305.KeySize]byte{}
-	receive := [chacha20poly1305.KeySize]byte{}
+	var send [chacha20poly1305.KeySize]byte
+	var receive [chacha20poly1305.KeySize]byte
 
 	if t.Handshake.Status == InitiateHandshakeResponseMessageReceived {
 		KDF2(&send, &receive, t.Handshake.ChainKey[:], nil)
