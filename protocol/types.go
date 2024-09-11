@@ -65,6 +65,7 @@ type MessageHandshakeResponse struct {
 type MessageHandshakeCookie struct {
 	Type     byte
 	Reserved ReservedSpace
+	Receiver uint32
 	Nonce    CookieNonce
 	Cookie   [CookieSize + poly1305.TagSize]byte
 }
@@ -72,22 +73,7 @@ type MessageHandshakeCookie struct {
 type MessageTransport struct {
 	Type     byte
 	Reserved ReservedSpace
+	Receiver uint32
 	Counter  uint64
 	Packet   []byte
-}
-
-func (m *MessageHandshakeInit) MessageType() byte {
-	return m.Type
-}
-
-func (m *MessageHandshakeResponse) MessageType() byte {
-	return m.Type
-}
-
-func (m *MessageHandshakeCookie) MessageType() byte {
-	return m.Type
-}
-
-func (m *MessageTransport) MessageType() byte {
-	return m.Type
 }

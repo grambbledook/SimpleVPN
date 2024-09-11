@@ -16,15 +16,18 @@ type Message interface {
 func (m *MessageHandshakeInit) ToBytes() []byte {
 	var buffer [HandshakeInitSize]byte
 
-	writer := bytes.NewBuffer(buffer[:])
-	binary.Write(writer, binary.LittleEndian, m)
+	writer := bytes.NewBuffer(buffer[:0])
+	err := binary.Write(writer, binary.LittleEndian, m)
+	if err != nil {
+		return nil
+	}
 
 	return writer.Bytes()
 }
 func (m *MessageHandshakeResponse) ToBytes() []byte {
 	var buffer [HandshakeCookieSize]byte
 
-	writer := bytes.NewBuffer(buffer[:])
+	writer := bytes.NewBuffer(buffer[:0])
 	binary.Write(writer, binary.LittleEndian, m)
 
 	return writer.Bytes()
@@ -32,7 +35,7 @@ func (m *MessageHandshakeResponse) ToBytes() []byte {
 func (m *MessageHandshakeCookie) ToBytes() []byte {
 	var buffer [HandshakeCookieSize]byte
 
-	writer := bytes.NewBuffer(buffer[:])
+	writer := bytes.NewBuffer(buffer[:0])
 	binary.Write(writer, binary.LittleEndian, m)
 
 	return writer.Bytes()
@@ -40,10 +43,16 @@ func (m *MessageHandshakeCookie) ToBytes() []byte {
 func (m *MessageTransport) ToBytes() []byte {
 	buffer := make([]byte, TransportHeaderSize+len(m.Packet))
 
-	writer := bytes.NewBuffer(buffer)
-	binary.Write(writer, binary.LittleEndian, m)
+	buffer[0] = m.Type
 
-	return writer.Bytes()
+	// skipping 3 bytes of reserved space
+	l, r := UIntSize, 2*UIntSize
+	binary.LittleEndian.PutUint32(buffer[l:r], m.Receiver)
+	l, r = r, r+ULongSize
+	binary.LittleEndian.PutUint64(buffer[l:r], m.Counter)
+
+	copy(buffer[r:], m.Packet)
+	return buffer
 }
 
 func (m *MessageHandshakeInit) FromBytes(data []byte) error {
@@ -57,6 +66,7 @@ func (m *MessageHandshakeInit) FromBytes(data []byte) error {
 
 	m.Type = data[0]
 
+	// skipping 3 bytes of reserved space
 	l, r := UIntSize, 2*UIntSize
 	m.Sender = binary.LittleEndian.Uint32(data[l:r])
 
@@ -88,8 +98,12 @@ func (m *MessageHandshakeResponse) FromBytes(data []byte) error {
 
 	m.Type = data[0]
 
+	// skipping 3 bytes of reserved space
 	l, r := UIntSize, 2*UIntSize
 	m.Sender = binary.LittleEndian.Uint32(data[l:r])
+
+	l, r = r, r+UIntSize
+	m.Receiver = binary.LittleEndian.Uint32(data[l:r])
 
 	l, r = r, r+PublicKeySize
 	m.Ephemeral = PublicKey(data[l:r])
@@ -116,7 +130,11 @@ func (m *MessageHandshakeCookie) FromBytes(data []byte) error {
 
 	m.Type = data[0]
 
-	l, r := UIntSize, UIntSize+CookieNonceSize
+	// skipping 3 bytes of reserved space
+	l, r := UIntSize, 2*UIntSize
+	m.Receiver = binary.LittleEndian.Uint32(data[l:r])
+
+	l, r = r, r+CookieNonceSize
 	m.Nonce = CookieNonce(data[l:r])
 
 	l, r = r, r+CookieSize+poly1305.TagSize
@@ -129,17 +147,21 @@ func (m *MessageTransport) FromBytes(data []byte) error {
 		return errors.New("invalid message type")
 	}
 
-	if len(data) <= HandshakeCookieSize {
+	if len(data) < TransportHeaderSize {
 		return errors.New("not enough data to read transport message")
 	}
 
 	m.Type = data[0]
 
-	l, r := UIntSize, UIntSize+ULongSize
+	// skipping 3 bytes of reserved space
+	l, r := UIntSize, 2*UIntSize
+	m.Receiver = binary.LittleEndian.Uint32(data[l:r])
+
+	l, r = r, r+ULongSize
 	m.Counter = binary.LittleEndian.Uint64(data[l:r])
 
-	l, r = r, r+CookieSize+poly1305.TagSize
-	m.Packet = data[l:r]
+	l, r = r, len(data)
+	m.Packet = data[l:]
 
 	return nil
 }
