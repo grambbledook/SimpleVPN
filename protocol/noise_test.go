@@ -34,8 +34,8 @@ func Test_Handshake(t *testing.T) {
 
 	t.Logf("Pre-compute static-static shared secret")
 	{
-		initiator.initialise()
-		responder.initialise()
+		initiator.Initialise()
+		responder.Initialise()
 
 		assertEquals(
 			t, "precomputedStaticStatic",

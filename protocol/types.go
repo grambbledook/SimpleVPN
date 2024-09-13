@@ -19,11 +19,10 @@ const (
 )
 
 type (
-	ReservedSpace [ReservedSpaceSize]byte
-	PublicKey     [PublicKeySize]byte
-	SharedSecret  [SharedSecretSize]byte
-	PrivateKey    [PrivateKeySize]byte
-	CookieNonce   [CookieNonceSize]byte
+	PublicKey    [PublicKeySize]byte
+	SharedSecret [SharedSecretSize]byte
+	PrivateKey   [PrivateKeySize]byte
+	CookieNonce  [CookieNonceSize]byte
 )
 
 const (
@@ -34,15 +33,14 @@ const (
 )
 
 const (
-	HandshakeInitType     = 0x01
-	HandshakeResponseType = 0x02
-	HandshakeCookieType   = 0x03
-	TransportType         = 0x04
+	HandshakeInitType     = 1
+	HandshakeResponseType = 2
+	HandshakeCookieType   = 3
+	TransportType         = 4
 )
 
 type MessageHandshakeInit struct {
-	Type      byte
-	Reserved  ReservedSpace
+	Type      uint32
 	Sender    uint32
 	Ephemeral PublicKey
 	Static    [PublicKeySize + poly1305.TagSize]byte
@@ -52,8 +50,7 @@ type MessageHandshakeInit struct {
 }
 
 type MessageHandshakeResponse struct {
-	Type      byte
-	Reserved  ReservedSpace
+	Type      uint32
 	Sender    uint32
 	Receiver  uint32
 	Ephemeral PublicKey
@@ -63,16 +60,14 @@ type MessageHandshakeResponse struct {
 }
 
 type MessageHandshakeCookie struct {
-	Type     byte
-	Reserved ReservedSpace
+	Type     uint32
 	Receiver uint32
 	Nonce    CookieNonce
 	Cookie   [CookieSize + poly1305.TagSize]byte
 }
 
 type MessageTransport struct {
-	Type     byte
-	Reserved ReservedSpace
+	Type     uint32
 	Receiver uint32
 	Counter  uint64
 	Packet   []byte

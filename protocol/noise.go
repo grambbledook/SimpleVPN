@@ -30,7 +30,7 @@ func setZeroes(b []byte) {
 	}
 }
 
-func (t *Tunnel) initialise() {
+func (t *Tunnel) Initialise() {
 	t.Handshake.PrecomputedStaticStatic, _ = t.Local.PrivateKey.SharedSecret(t.Remote.PublicKey)
 }
 

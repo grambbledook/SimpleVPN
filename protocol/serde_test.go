@@ -1,6 +1,8 @@
 package protocol
 
 import (
+	"bytes"
+	"encoding/base64"
 	"golang.org/x/crypto/blake2s"
 	"golang.org/x/crypto/poly1305"
 	"math"
@@ -20,7 +22,7 @@ func Test_MessageSerde_MessageHandshakeInit(t *testing.T) {
 	}
 	deserialised := MessageHandshakeInit{}
 
-	runTest(t, &original, &deserialised)
+	runMessageSerdeTest(t, &original, &deserialised)
 }
 
 func Test_MessageSerde_MessageHandshakeResponse(t *testing.T) {
@@ -35,7 +37,7 @@ func Test_MessageSerde_MessageHandshakeResponse(t *testing.T) {
 	}
 	deserialised := MessageHandshakeResponse{}
 
-	runTest(t, &original, &deserialised)
+	runMessageSerdeTest(t, &original, &deserialised)
 }
 
 func Test_MessageSerde_HandshakeCookie(t *testing.T) {
@@ -46,7 +48,7 @@ func Test_MessageSerde_HandshakeCookie(t *testing.T) {
 	}
 	deserialised := MessageHandshakeCookie{}
 
-	runTest(t, &original, &deserialised)
+	runMessageSerdeTest(t, &original, &deserialised)
 }
 
 func Test_MessageSerde_MessageTransport(t *testing.T) {
@@ -58,10 +60,10 @@ func Test_MessageSerde_MessageTransport(t *testing.T) {
 	}
 	deserialised := MessageTransport{}
 
-	runTest(t, &original, &deserialised)
+	runMessageSerdeTest(t, &original, &deserialised)
 }
 
-func runTest(t *testing.T, original Message, deserialised Message) {
+func runMessageSerdeTest(t *testing.T, original Message, deserialised Message) {
 	serialised := original.ToBytes()
 
 	if err := deserialised.FromBytes(serialised); err != nil {
@@ -70,5 +72,33 @@ func runTest(t *testing.T, original Message, deserialised Message) {
 
 	if !reflect.DeepEqual(original, deserialised) {
 		t.Fatal("Deserialised object does not match original")
+	}
+}
+
+func Test_PrivateKey_ParsingAndDerivation(t *testing.T) {
+	originalSK := "WEGlnZqW7a3J+AmKoDg+/L95sSIutu9ApEp3AY+l30o="
+	originalPK := "pMo33VR8Lwi0nmi3sAFTFttomPI71LSMkEjFXws94wU="
+
+	sk := PrivateKey{}
+	err := sk.FromBase64(originalSK)
+	if err != nil {
+		t.Fatal("Failed to parse private key from base64 string", err)
+	}
+
+	pk := PublicKey{}
+	err = pk.FromBase64(originalPK)
+	if err != nil {
+		t.Fatal("Failed to parse public key from base64 string", err)
+	}
+
+	derivedPK := sk.PublicKey()
+	derivedEncodedPK := base64.StdEncoding.EncodeToString(derivedPK[:])
+
+	if !bytes.Equal(pk[:], derivedPK[:]) {
+		t.Fatal("Parsed public key does not match the derived one")
+	}
+
+	if derivedEncodedPK != originalPK {
+		t.Fatal("Public key does not match original")
 	}
 }

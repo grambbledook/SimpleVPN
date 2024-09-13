@@ -2,11 +2,32 @@ package protocol
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/binary"
 	"errors"
-	"golang.org/x/crypto/blake2s"
-	"golang.org/x/crypto/poly1305"
 )
+
+func (sk *PrivateKey) FromBase64(str string) error {
+	if err := decodeFromBase64(sk[:], str); err != nil {
+		return err
+	}
+	sk.clamp()
+	return nil
+}
+
+func (sk *PublicKey) FromBase64(str string) error {
+	return decodeFromBase64(sk[:], str)
+}
+
+func decodeFromBase64(dst []byte, str string) error {
+	key, err := base64.StdEncoding.DecodeString(str)
+	if err != nil {
+		return err
+	}
+	copy(dst[:], key)
+
+	return nil
+}
 
 type Message interface {
 	ToBytes() []byte
@@ -43,7 +64,7 @@ func (m *MessageHandshakeCookie) ToBytes() []byte {
 func (m *MessageTransport) ToBytes() []byte {
 	buffer := make([]byte, TransportHeaderSize+len(m.Packet))
 
-	buffer[0] = m.Type
+	binary.LittleEndian.PutUint32(buffer[0:], m.Type)
 
 	// skipping 3 bytes of reserved space
 	l, r := UIntSize, 2*UIntSize
@@ -64,27 +85,10 @@ func (m *MessageHandshakeInit) FromBytes(data []byte) error {
 		return errors.New("not enough data to read handshake init message")
 	}
 
-	m.Type = data[0]
-
-	// skipping 3 bytes of reserved space
-	l, r := UIntSize, 2*UIntSize
-	m.Sender = binary.LittleEndian.Uint32(data[l:r])
-
-	l, r = r, r+PublicKeySize
-	m.Ephemeral = PublicKey(data[l:r])
-
-	l, r = r, r+PublicKeySize+poly1305.TagSize
-	m.Static = [PublicKeySize + poly1305.TagSize]byte(data[l:r])
-
-	l, r = r, r+Tai64nTimestampSIze+poly1305.TagSize
-	m.Timestamp = [Tai64nTimestampSIze + poly1305.TagSize]byte(data[l:r])
-
-	l, r = r, r+blake2s.Size128
-	m.MAC1 = [blake2s.Size128]byte(data[l:r])
-
-	l, r = r, r+blake2s.Size128
-	m.MAC2 = [blake2s.Size128]byte(data[l:r])
-
+	reader := bytes.NewReader(data)
+	if err := binary.Read(reader, binary.LittleEndian, m); err != nil {
+		return err
+	}
 	return nil
 }
 func (m *MessageHandshakeResponse) FromBytes(data []byte) error {
@@ -96,27 +100,10 @@ func (m *MessageHandshakeResponse) FromBytes(data []byte) error {
 		return errors.New("not enough data to read handshake response message")
 	}
 
-	m.Type = data[0]
-
-	// skipping 3 bytes of reserved space
-	l, r := UIntSize, 2*UIntSize
-	m.Sender = binary.LittleEndian.Uint32(data[l:r])
-
-	l, r = r, r+UIntSize
-	m.Receiver = binary.LittleEndian.Uint32(data[l:r])
-
-	l, r = r, r+PublicKeySize
-	m.Ephemeral = PublicKey(data[l:r])
-
-	l, r = r, r+poly1305.TagSize
-	m.Empty = [poly1305.TagSize]byte(data[l:r])
-
-	l, r = r, r+blake2s.Size128
-	m.MAC1 = [blake2s.Size128]byte(data[l:r])
-
-	l, r = r, r+blake2s.Size128
-	m.MAC2 = [blake2s.Size128]byte(data[l:r])
-
+	reader := bytes.NewReader(data)
+	if err := binary.Read(reader, binary.LittleEndian, m); err != nil {
+		return err
+	}
 	return nil
 }
 func (m *MessageHandshakeCookie) FromBytes(data []byte) error {
@@ -128,18 +115,10 @@ func (m *MessageHandshakeCookie) FromBytes(data []byte) error {
 		return errors.New("not enough data to read handshake cookie message")
 	}
 
-	m.Type = data[0]
-
-	// skipping 3 bytes of reserved space
-	l, r := UIntSize, 2*UIntSize
-	m.Receiver = binary.LittleEndian.Uint32(data[l:r])
-
-	l, r = r, r+CookieNonceSize
-	m.Nonce = CookieNonce(data[l:r])
-
-	l, r = r, r+CookieSize+poly1305.TagSize
-	m.Cookie = [CookieSize + poly1305.TagSize]byte(data[l:r])
-
+	reader := bytes.NewReader(data)
+	if err := binary.Read(reader, binary.LittleEndian, m); err != nil {
+		return err
+	}
 	return nil
 }
 func (m *MessageTransport) FromBytes(data []byte) error {
@@ -151,10 +130,10 @@ func (m *MessageTransport) FromBytes(data []byte) error {
 		return errors.New("not enough data to read transport message")
 	}
 
-	m.Type = data[0]
+	l, r := 0, UIntSize
+	m.Type = binary.LittleEndian.Uint32(data[l:r])
 
-	// skipping 3 bytes of reserved space
-	l, r := UIntSize, 2*UIntSize
+	l, r = r, r+UIntSize
 	m.Receiver = binary.LittleEndian.Uint32(data[l:r])
 
 	l, r = r, r+ULongSize

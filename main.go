@@ -2,6 +2,7 @@ package main
 
 import (
 	"com.github.grambbledook/simple_vpn/protocol"
+	"encoding/base64"
 	"fmt"
 	"gopkg.in/ini.v1"
 	"net"
@@ -15,12 +16,16 @@ func Must[T any](t T, err error) T {
 }
 
 func PublicKey(key string) (pub protocol.PublicKey) {
-	copy(pub[:], key)
+	if err := pub.FromBase64(key); err != nil {
+		panic(err)
+	}
 	return
 }
 
 func PrivateKey(key string) (priv protocol.PrivateKey) {
-	copy(priv[:], key)
+	if err := priv.FromBase64(key); err != nil {
+		panic(err)
+	}
 	return
 }
 
@@ -29,19 +34,37 @@ func main() {
 
 	devicePublicKey := cfg.Section("Interface").Key("PublicKey")
 	devicePrivateKey := cfg.Section("Interface").Key("PrivateKey")
+	clientPrivateKey := cfg.Section("Peer").Key("PrivateKey")
 	clientPublicKey := cfg.Section("Peer").Key("PublicKey")
 
 	tunnel := protocol.Tunnel{
-		Remote: protocol.Peer{
+		Local: protocol.Peer{
 			PublicKey:  PublicKey(devicePublicKey.String()),
 			PrivateKey: PrivateKey(devicePrivateKey.String()),
 		},
-		Local: protocol.Peer{
+		Remote: protocol.Peer{
 			PublicKey:  PublicKey(clientPublicKey.String()),
-			PrivateKey: PrivateKey(""),
+			PrivateKey: PrivateKey(clientPrivateKey.String()),
 		},
 		Handshake: protocol.Handshake{},
 	}
+	tunnel.Initialise()
+
+	fmt.Println("host sk 0:", devicePrivateKey.String())
+	fmt.Println("host sk 1:", base64.StdEncoding.EncodeToString(tunnel.Local.PrivateKey[:]))
+
+	fmt.Println("host pk 0:", devicePublicKey.String())
+	fmt.Println("host pk 1:", base64.StdEncoding.EncodeToString(tunnel.Local.PublicKey[:]))
+	ppk := tunnel.Local.PrivateKey.PublicKey()
+	fmt.Println("host pk 2:", base64.StdEncoding.EncodeToString(ppk[:]))
+
+	fmt.Println("client sk 0:", clientPrivateKey.String())
+	fmt.Println("client sk 1:", base64.StdEncoding.EncodeToString(tunnel.Remote.PrivateKey[:]))
+
+	fmt.Println("client pk 0:", clientPublicKey.String())
+	fmt.Println("client pk 1:", base64.StdEncoding.EncodeToString(tunnel.Remote.PublicKey[:]))
+	cpk := tunnel.Remote.PrivateKey.PublicKey()
+	fmt.Println("client pk 2:", base64.StdEncoding.EncodeToString(cpk[:]))
 
 	listenPort := Must(cfg.Section("Interface").Key("ListenPort").Int())
 	fmt.Println("Interface params", devicePublicKey, devicePrivateKey, listenPort)
@@ -51,11 +74,6 @@ func main() {
 		Port: listenPort,
 	}
 	fmt.Println("UDPAddr", host)
-
-	peer := net.UDPAddr{
-		IP:   net.IPv4(127, 0, 0, 1),
-		Port: 52974,
-	}
 
 	bind := Must(net.ListenUDP("udp", &host))
 	defer bind.Close()
@@ -75,7 +93,7 @@ func main() {
 		if buffer[0] == protocol.HandshakeInitType {
 
 			var message protocol.MessageHandshakeInit
-			if err := message.FromBytes(buffer); err != nil {
+			if err := message.FromBytes(buffer[:n]); err != nil {
 				fmt.Println("  Can't parse a message of type [HandshakeInit]", err)
 				continue
 			}
@@ -89,7 +107,7 @@ func main() {
 
 			if response, err := tunnel.CreateInitiateHandshakeResponse(); err != nil {
 				fmt.Println("  Error occurred creating Handshake response", err)
-			} else if _, err = bind.WriteToUDP(response.ToBytes(), &peer); err != nil {
+			} else if _, err = bind.WriteToUDP(response.ToBytes(), remoteAddr); err != nil {
 				fmt.Println("  Error occurred on sending Handshake response", err)
 			}
 		}
