@@ -29,6 +29,20 @@ func decodeFromBase64(dst []byte, str string) error {
 	return nil
 }
 
+func PkFromString(key string) (pub PublicKey) {
+	if err := pub.FromBase64(key); err != nil {
+		panic(err)
+	}
+	return
+}
+
+func SkFromString(key string) (priv PrivateKey) {
+	if err := priv.FromBase64(key); err != nil {
+		panic(err)
+	}
+	return
+}
+
 type Message interface {
 	ToBytes() []byte
 	FromBytes([]byte) error

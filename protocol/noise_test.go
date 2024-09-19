@@ -2,8 +2,45 @@ package protocol
 
 import (
 	"bytes"
+	"encoding/base64"
 	"testing"
 )
+
+func assertNil(t *testing.T, message string, err error) {
+	if err != nil {
+		t.Fatal(message, err)
+	}
+}
+
+func assertEqualb(t *testing.T, message string, a, b []byte) {
+	if !bytes.Equal(a, b) {
+		t.Fatalf("[%s]\n  L: %v\n  R: %v", message, a, b)
+	}
+}
+
+func TestTunnel_ProcessInitiateHandshakeMessage(t *testing.T) {
+	message := MessageHandshakeInit{}
+	decodeString := Must(base64.StdEncoding.DecodeString("AQAAAJBrQxNFTPvCPN7n/XiXPJIZjLIIfaR04Q1mzI8MWBEB2vBpMZ+B5vPkdO0XJ0BAr3DIFfjnYzoooy5iC9p3hmcHeabLfCfCdxYTrWsBluFQu8WiXZgxo/V2WBANV/XIrOxCxQz2H9/sB6dU6yOS3RobwxeNQQrLZmUIvCWvBV3uAAAAAAAAAAAAAAAAAAAAAA=="))
+	message.FromBytes(decodeString)
+
+	tunnel := Tunnel{
+		Local: Peer{
+			PublicKey:  PkFromString("pMo33VR8Lwi0nmi3sAFTFttomPI71LSMkEjFXws94wU="),
+			PrivateKey: SkFromString("WEGlnZqW7a3J+AmKoDg+/L95sSIutu9ApEp3AY+l30o="),
+		},
+		Remote: Peer{
+			PublicKey:  PkFromString("doQkpj/AjVrfbTFENyj46kzYWNDdrXulSfxBdnmslCo="),
+			PrivateKey: SkFromString("0Iic3DBj7LXp6dl+HKWT7a6/XXzRfqaDiZXArCpLQWE="),
+		},
+		Handshake: Handshake{},
+	}
+	tunnel.Initialise()
+
+	err := tunnel.ProcessInitiateHandshakeMessage(message)
+	if err != nil {
+		t.Fatal("Failed to process initiate handshake message", err)
+	}
+}
 
 func Test_Handshake(t *testing.T) {
 	initiatorSK := NewPrivateKey()
@@ -37,7 +74,7 @@ func Test_Handshake(t *testing.T) {
 		initiator.Initialise()
 		responder.Initialise()
 
-		assertEquals(
+		assertEqualb(
 			t, "precomputedStaticStatic",
 			initiator.Handshake.PrecomputedStaticStatic[:],
 			responder.Handshake.PrecomputedStaticStatic[:],
@@ -51,12 +88,12 @@ func Test_Handshake(t *testing.T) {
 		err := responder.ProcessInitiateHandshakeMessage(ih)
 
 		assertNil(t, "Unable to process handshake initiation", err)
-		assertEquals(
+		assertEqualb(
 			t, "chainKey after initiation",
 			initiator.Handshake.ChainKey[:],
 			responder.Handshake.ChainKey[:],
 		)
-		assertEquals(
+		assertEqualb(
 			t, "hash after initiation",
 			initiator.Handshake.Hash[:],
 			responder.Handshake.Hash[:],
@@ -70,12 +107,12 @@ func Test_Handshake(t *testing.T) {
 		err := initiator.ProcessInitiateHandshakeResponseMessage(ch)
 
 		assertNil(t, "Unable to process handshake response", err)
-		assertEquals(
+		assertEqualb(
 			t, "chainKey after handshake response",
 			initiator.Handshake.ChainKey[:],
 			responder.Handshake.ChainKey[:],
 		)
-		assertEquals(
+		assertEqualb(
 			t, "hash after handshake response",
 			initiator.Handshake.Hash[:],
 			responder.Handshake.Hash[:],
@@ -101,7 +138,7 @@ func Test_Handshake(t *testing.T) {
 		decrypted, err := responder.Keypair.ReceiveKey.Open(sealed[:], ZeroNonce[:], encrypted, nil)
 
 		assertNil(t, "Failed to decrypt data in i-r communication", err)
-		assertEquals(t, "decrypted data", testData, decrypted)
+		assertEqualb(t, "decrypted data", testData, decrypted)
 	}
 
 	t.Log("Test transport keys for r-i communication")
@@ -113,18 +150,6 @@ func Test_Handshake(t *testing.T) {
 		decrypted, err := initiator.Keypair.ReceiveKey.Open(sealed[:], ZeroNonce[:], encrypted, nil)
 
 		assertNil(t, "Failed to decrypt data in r-i communication", err)
-		assertEquals(t, "decrypted data", testData, decrypted)
-	}
-}
-
-func assertNil(t *testing.T, message string, err error) {
-	if err != nil {
-		t.Fatal(message, err)
-	}
-}
-
-func assertEquals(t *testing.T, message string, a, b []byte) {
-	if !bytes.Equal(a, b) {
-		t.Fatalf("[%s]\n  L: %v\n  R: %v", message, a, b)
+		assertEqualb(t, "decrypted data", testData, decrypted)
 	}
 }

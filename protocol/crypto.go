@@ -70,8 +70,8 @@ func HKDFExpand(sum *[blake2s.Size]byte, key, info, input []byte) {
 		h, _ := blake2s.New256(nil)
 		return h
 	}, key)
-	mac.Write(input)
 	mac.Write(info)
+	mac.Write(input)
 	mac.Sum(sum[:0])
 }
 
