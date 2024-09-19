@@ -8,8 +8,10 @@ import (
 )
 
 const (
-	CONSTRUCTION = "Noise_IKpsk2_25519_ChaChaPoly_BLAKE2s"
-	IDENTIFIER   = "WireGuard v1 zx2c4 Jason@zx2c4.com"
+	Construction      = "Noise_IKpsk2_25519_ChaChaPoly_BLAKE2s"
+	Identifier        = "WireGuard v1 zx2c4 Jason@zx2c4.com"
+	LabelMac1String   = "mac1----"
+	LabelCookieString = "cookie--"
 )
 
 var (
@@ -17,11 +19,15 @@ var (
 	InitialHash     [blake2s.Size]byte
 	ZeroNonce       [chacha20poly1305.NonceSize]byte
 	PreSharedKey    = [SharedSecretSize]byte{}
+	LabelMac1       = [blake2s.Size]byte{}
+	LabelCookie     = [blake2s.Size]byte{}
 )
 
 func init() {
-	HASH(&InitialKeyChain, []byte(CONSTRUCTION))
-	HASH(&InitialHash, InitialKeyChain[:], []byte(IDENTIFIER))
+	HASH(&InitialKeyChain, []byte(Construction))
+	HASH(&InitialHash, InitialKeyChain[:], []byte(Identifier))
+	HASH(&LabelMac1, []byte(LabelMac1String))
+	HASH(&LabelCookie, []byte(LabelCookieString))
 }
 
 func setZeroes(b []byte) {
@@ -31,11 +37,19 @@ func setZeroes(b []byte) {
 }
 
 func (t *Tunnel) Initialise() {
+	t.Stamper.Init(t.Remote.PublicKey)
 	t.Handshake.PrecomputedStaticStatic, _ = t.Local.PrivateKey.SharedSecret(t.Remote.PublicKey)
 }
 
 func (t *Tunnel) InitiateHandshake() (MessageHandshakeInit, error) {
+	id, err := RandomUint32()
+	if err != nil {
+		return MessageHandshakeInit{}, err
+	}
+
+	t.LocalID = id
 	local, remote := t.Local, t.Remote
+
 	// 1-H H := HASH(C || Spubr)
 	HASH(&t.Handshake.Hash, InitialHash[:], remote.PublicKey[:])
 
@@ -48,6 +62,7 @@ func (t *Tunnel) InitiateHandshake() (MessageHandshakeInit, error) {
 	message := MessageHandshakeInit{
 		Type:      HandshakeInitType,
 		Ephemeral: t.Handshake.LocalEphemeralPublic,
+		Sender:    t.LocalID,
 	}
 
 	// es := DH(Eprivi, Spubr)
@@ -92,11 +107,11 @@ func (t *Tunnel) ProcessInitiateHandshakeMessage(message MessageHandshakeInit) e
 	// 1-H H := HASH(C || Spubr)
 	HASH(&hash, InitialHash[:], t.Local.PublicKey[:])
 
-	// 1-C C := KDF1(C,Epubi)
-	KDF1(&chainKey, InitialKeyChain[:], message.Ephemeral[:])
-
 	// 2-H H := HASH(H || Epubi)
 	HASH(&hash, hash[:], message.Ephemeral[:])
+
+	// 1-C C := KDF1(C,Epubi)
+	KDF1(&chainKey, InitialKeyChain[:], message.Ephemeral[:])
 
 	// se := DH(Sprivr, Epubi)
 	ss, err := t.Local.PrivateKey.SharedSecret(message.Ephemeral)
@@ -146,6 +161,7 @@ func (t *Tunnel) ProcessInitiateHandshakeMessage(message MessageHandshakeInit) e
 	t.Handshake.ChainKey = chainKey
 
 	t.Handshake.InitiatorIndex = message.Sender
+	t.RemoteID = message.Sender
 	t.Handshake.RemoteEphemeralPublic = message.Ephemeral
 	t.Handshake.Status = InitiateHandshakeMessageReceived
 	return nil
@@ -153,6 +169,13 @@ func (t *Tunnel) ProcessInitiateHandshakeMessage(message MessageHandshakeInit) e
 
 func (t *Tunnel) CreateInitiateHandshakeResponse() (MessageHandshakeResponse, error) {
 	remote := t.Remote
+
+	id, err := RandomUint32()
+	if err != nil {
+		return MessageHandshakeResponse{}, err
+	}
+
+	t.LocalID = id
 
 	var hash [blake2s.Size]byte
 	var chainKey [chacha20poly1305.KeySize]byte
@@ -162,6 +185,8 @@ func (t *Tunnel) CreateInitiateHandshakeResponse() (MessageHandshakeResponse, er
 	message := MessageHandshakeResponse{
 		Type:      HandshakeResponseType,
 		Ephemeral: t.Handshake.LocalEphemeralPublic,
+		Sender:    t.LocalID,
+		Receiver:  t.RemoteID,
 	}
 
 	HASH(&hash, t.Handshake.Hash[:], message.Ephemeral[:])
@@ -197,6 +222,7 @@ func (t *Tunnel) CreateInitiateHandshakeResponse() (MessageHandshakeResponse, er
 
 func (t *Tunnel) ProcessInitiateHandshakeResponseMessage(message MessageHandshakeResponse) error {
 	local, _ := t.Local, t.Remote
+	t.RemoteID = t.Handshake.InitiatorIndex
 
 	var hash [blake2s.Size]byte
 	var chainKey [chacha20poly1305.KeySize]byte

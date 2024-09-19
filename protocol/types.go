@@ -26,10 +26,10 @@ type (
 )
 
 const (
-	HandshakeInitSize     = 148
-	HandshakeResponseSize = 92
-	HandshakeCookieSize   = 64 // size of cookie reply message
-	TransportHeaderSize   = 16
+	MessageHandshakeInitSize     = 148
+	MessageHandshakeResponseSize = 92
+	MessageHandshakeCookieSize   = 64 // size of cookie reply message
+	MessageTransportHeaderSize   = 16
 )
 
 const (

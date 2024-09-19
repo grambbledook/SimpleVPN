@@ -25,6 +25,9 @@ type Tunnel struct {
 	Handshake Handshake
 	Keypair   Keypair
 	Nonce     uint64
+	LocalID   uint32
+	RemoteID  uint32
+	Stamper   Stamper
 }
 
 type Handshake struct {

@@ -67,7 +67,15 @@ func main() {
 	fmt.Println("client pk 2:", base64.StdEncoding.EncodeToString(cpk[:]))
 
 	listenPort := Must(cfg.Section("Interface").Key("ListenPort").Int())
-	fmt.Println("Interface params", devicePublicKey, devicePrivateKey, listenPort)
+	fmt.Println("Interface params:\n",
+		"  PORT", listenPort, "\n",
+		"  SK", base64.StdEncoding.EncodeToString(tunnel.Local.PrivateKey[:]), "\n",
+		"  PK", base64.StdEncoding.EncodeToString(tunnel.Local.PublicKey[:]), "\n",
+	)
+	fmt.Println("Peer params:\n",
+		"  SK", base64.StdEncoding.EncodeToString(tunnel.Remote.PrivateKey[:]), "\n",
+		"  PK", base64.StdEncoding.EncodeToString(tunnel.Remote.PublicKey[:]), "\n",
+	)
 
 	host := net.UDPAddr{
 		IP:   net.IPv4(0, 0, 0, 0),
@@ -104,10 +112,14 @@ func main() {
 				fmt.Println("  Error occurred on [HandshakeInit] message processing", err)
 				continue
 			}
-
-			if response, err := tunnel.CreateInitiateHandshakeResponse(); err != nil {
+			response, err := tunnel.CreateInitiateHandshakeResponse()
+			if err != nil {
 				fmt.Println("  Error occurred creating Handshake response", err)
-			} else if _, err = bind.WriteToUDP(response.ToBytes(), remoteAddr); err != nil {
+			}
+			bytes := response.ToBytes()
+			tunnel.Stamper.Stamp(bytes)
+
+			if _, err = bind.WriteToUDP(bytes, remoteAddr); err != nil {
 				fmt.Println("  Error occurred on sending Handshake response", err)
 			}
 		}

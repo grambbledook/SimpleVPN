@@ -3,6 +3,7 @@ package protocol
 import (
 	"crypto/hmac"
 	"crypto/rand"
+	"encoding/binary"
 	"golang.org/x/crypto/blake2s"
 	"golang.org/x/crypto/curve25519"
 	"hash"
@@ -85,10 +86,9 @@ func HKDFExpand(sum *[blake2s.Size]byte, key, info, input []byte) {
 //	T(2) = HMAC-Hash(PRK, T(1) | info | 0x02)
 //	T(3) = HMAC-Hash(PRK, T(2) | info | 0x03)
 func KDF1(t0 *[blake2s.Size]byte, key, input []byte) {
-	var prk [blake2s.Size]byte
-	HKDFExtract(&prk, key, input)
-
-	HKDFExpand(t0, prk[:], []byte{}, []byte{0x1})
+	// Extract. set t0 = HMAC-Hash(key, input), i.e. compute PRK
+	HKDFExtract(t0, key, input)
+	HKDFExpand(t0, t0[:], []byte{}, []byte{0x1})
 }
 
 //	N = ceil(L/HashLen)
@@ -164,4 +164,10 @@ func (sk *PrivateKey) SharedSecret(pub PublicKey) (SharedSecret, error) {
 
 	ss, err := curve25519.X25519(ask[:], apk[:])
 	return SharedSecret(ss), err
+}
+
+func RandomUint32() (uint32, error) {
+	var b [4]byte
+	_, err := rand.Read(b[:])
+	return binary.LittleEndian.Uint32(b[:]), err
 }

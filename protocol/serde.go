@@ -35,7 +35,7 @@ type Message interface {
 }
 
 func (m *MessageHandshakeInit) ToBytes() []byte {
-	var buffer [HandshakeInitSize]byte
+	var buffer [MessageHandshakeInitSize]byte
 
 	writer := bytes.NewBuffer(buffer[:0])
 	err := binary.Write(writer, binary.LittleEndian, m)
@@ -46,7 +46,7 @@ func (m *MessageHandshakeInit) ToBytes() []byte {
 	return writer.Bytes()
 }
 func (m *MessageHandshakeResponse) ToBytes() []byte {
-	var buffer [HandshakeCookieSize]byte
+	var buffer [MessageHandshakeCookieSize]byte
 
 	writer := bytes.NewBuffer(buffer[:0])
 	binary.Write(writer, binary.LittleEndian, m)
@@ -54,7 +54,7 @@ func (m *MessageHandshakeResponse) ToBytes() []byte {
 	return writer.Bytes()
 }
 func (m *MessageHandshakeCookie) ToBytes() []byte {
-	var buffer [HandshakeCookieSize]byte
+	var buffer [MessageHandshakeCookieSize]byte
 
 	writer := bytes.NewBuffer(buffer[:0])
 	binary.Write(writer, binary.LittleEndian, m)
@@ -62,7 +62,7 @@ func (m *MessageHandshakeCookie) ToBytes() []byte {
 	return writer.Bytes()
 }
 func (m *MessageTransport) ToBytes() []byte {
-	buffer := make([]byte, TransportHeaderSize+len(m.Packet))
+	buffer := make([]byte, MessageTransportHeaderSize+len(m.Packet))
 
 	binary.LittleEndian.PutUint32(buffer[0:], m.Type)
 
@@ -81,7 +81,7 @@ func (m *MessageHandshakeInit) FromBytes(data []byte) error {
 		return errors.New("invalid message type")
 	}
 
-	if len(data) < HandshakeInitSize {
+	if len(data) < MessageHandshakeInitSize {
 		return errors.New("not enough data to read handshake init message")
 	}
 
@@ -96,7 +96,7 @@ func (m *MessageHandshakeResponse) FromBytes(data []byte) error {
 		return errors.New("invalid message type")
 	}
 
-	if len(data) != HandshakeResponseSize {
+	if len(data) != MessageHandshakeResponseSize {
 		return errors.New("not enough data to read handshake response message")
 	}
 
@@ -111,7 +111,7 @@ func (m *MessageHandshakeCookie) FromBytes(data []byte) error {
 		return errors.New("invalid message type")
 	}
 
-	if len(data) != HandshakeCookieSize {
+	if len(data) != MessageHandshakeCookieSize {
 		return errors.New("not enough data to read handshake cookie message")
 	}
 
@@ -126,7 +126,7 @@ func (m *MessageTransport) FromBytes(data []byte) error {
 		return errors.New("invalid message type")
 	}
 
-	if len(data) < TransportHeaderSize {
+	if len(data) < MessageTransportHeaderSize {
 		return errors.New("not enough data to read transport message")
 	}
 
