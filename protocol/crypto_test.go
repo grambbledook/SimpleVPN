@@ -1,8 +1,8 @@
 package protocol
 
 import (
-	"bytes"
 	"encoding/hex"
+	"github.com/stretchr/testify/assert"
 	"golang.org/x/crypto/blake2s"
 	"testing"
 )
@@ -13,12 +13,6 @@ type KDFTest struct {
 	t0    string
 	t1    string
 	t2    string
-}
-
-func assertEquals(t *testing.T, a, b string) {
-	if a != b {
-		t.Fatal(a, "=", b)
-	}
 }
 
 func Test_ECDH(t *testing.T) {
@@ -40,9 +34,7 @@ func Test_ECDH(t *testing.T) {
 	t.Log("A's SS", aliceSS)
 	t.Log("B's SS", bobsSS)
 
-	if !bytes.Equal(aliceSS[:], bobsSS[:]) {
-		t.Fatal("Shared secrets do not match")
-	}
+	assert.Equal(t, aliceSS, bobsSS, "Shared secrets do not match")
 }
 
 // Data for this test case copied from
@@ -78,20 +70,20 @@ func Test_KDFs(t *testing.T) {
 		key, _ := hex.DecodeString(data.key)
 		input, _ := hex.DecodeString(data.input)
 		KDF1(&t0, key, input)
-		assertEquals(t, data.t0, hex.EncodeToString(t0[:]))
+		assert.Equal(t, data.t0, hex.EncodeToString(t0[:]))
 	}
 	for _, data := range tests {
 		var t0, t1 [blake2s.Size]byte
 		key, _ := hex.DecodeString(data.key)
 		input, _ := hex.DecodeString(data.input)
 		KDF2(&t0, &t1, key, input)
-		assertEquals(t, data.t0, hex.EncodeToString(t0[:]))
+		assert.Equal(t, data.t0, hex.EncodeToString(t0[:]))
 	}
 	for _, data := range tests {
 		var t0, t1, t2 [blake2s.Size]byte
 		key, _ := hex.DecodeString(data.key)
 		input, _ := hex.DecodeString(data.input)
 		KDF3(&t0, &t1, &t2, key, input)
-		assertEquals(t, data.t0, hex.EncodeToString(t0[:]))
+		assert.Equal(t, data.t0, hex.EncodeToString(t0[:]))
 	}
 }

@@ -1,8 +1,8 @@
 package protocol
 
 import (
-	"bytes"
 	"encoding/base64"
+	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
@@ -31,14 +31,13 @@ func Test_StamperMac1(t *testing.T) {
 	mac2 := len(data) - CookieSize
 	mac1 := mac2 - CookieSize
 
-	expected := [CookieSize]byte(data[mac1:mac2])
-	stamper.Stamp(data)
+	test := make([]byte, len(data))
+	copy(test, data)
 
-	if !bytes.Equal(expected[:], data[mac1:mac2]) {
-		t.Fatalf("Original and generated MACs do not match. Expected %v, Got %v", expected, data[mac1:mac2])
-	}
+	stamper.Stamp(test)
 
-	if !checker.CheckMAC1(data) {
-		t.Fatal("MAC1 verification failed")
-	}
+	assert.Equal(t, data[mac1:], test[mac1:], "Mac1 is invalid")
+	assert.Equal(t, data[mac2:], test[mac2:], "Mac2 is invalid")
+
+	assert.True(t, checker.CheckMAC1(data), "Mac1 verification failed")
 }

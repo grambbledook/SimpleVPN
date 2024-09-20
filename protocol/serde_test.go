@@ -1,12 +1,11 @@
 package protocol
 
 import (
-	"bytes"
 	"encoding/base64"
+	"github.com/stretchr/testify/assert"
 	"golang.org/x/crypto/blake2s"
 	"golang.org/x/crypto/poly1305"
 	"math"
-	"reflect"
 	"testing"
 )
 
@@ -66,13 +65,10 @@ func Test_MessageSerde_MessageTransport(t *testing.T) {
 func runMessageSerdeTest(t *testing.T, original Message, deserialised Message) {
 	serialised := original.ToBytes()
 
-	if err := deserialised.FromBytes(serialised); err != nil {
-		t.Fatal("Failed to deserialise message form a byte array", err)
-	}
+	err := deserialised.FromBytes(serialised)
 
-	if !reflect.DeepEqual(original, deserialised) {
-		t.Fatal("Deserialised object does not match original")
-	}
+	assert.Nil(t, err)
+	assert.Equal(t, original, deserialised)
 }
 
 func Test_PrivateKey_ParsingAndDerivation(t *testing.T) {
@@ -81,24 +77,15 @@ func Test_PrivateKey_ParsingAndDerivation(t *testing.T) {
 
 	sk := PrivateKey{}
 	err := sk.FromBase64(originalSK)
-	if err != nil {
-		t.Fatal("Failed to parse private key from base64 string", err)
-	}
+	assert.Nil(t, err)
 
 	pk := PublicKey{}
 	err = pk.FromBase64(originalPK)
-	if err != nil {
-		t.Fatal("Failed to parse public key from base64 string", err)
-	}
+	assert.Nil(t, err)
 
 	derivedPK := sk.PublicKey()
 	derivedEncodedPK := base64.StdEncoding.EncodeToString(derivedPK[:])
 
-	if !bytes.Equal(pk[:], derivedPK[:]) {
-		t.Fatal("Parsed public key does not match the derived one")
-	}
-
-	if derivedEncodedPK != originalPK {
-		t.Fatal("Public key does not match original")
-	}
+	assert.Equal(t, pk, derivedPK)
+	assert.Equal(t, derivedEncodedPK, originalPK)
 }
