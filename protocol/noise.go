@@ -19,15 +19,13 @@ var (
 	InitialHash     [blake2s.Size]byte
 	ZeroNonce       [chacha20poly1305.NonceSize]byte
 	PreSharedKey    = [SharedSecretSize]byte{}
-	LabelMac1       = [blake2s.Size]byte{}
-	LabelCookie     = [blake2s.Size]byte{}
+	LabelMac1       = []byte(LabelMac1String)
+	LabelCookie     = []byte(LabelCookieString)
 )
 
 func init() {
 	HASH(&InitialKeyChain, []byte(Construction))
 	HASH(&InitialHash, InitialKeyChain[:], []byte(Identifier))
-	HASH(&LabelMac1, []byte(LabelMac1String))
-	HASH(&LabelCookie, []byte(LabelCookieString))
 }
 
 func setZeroes(b []byte) {

@@ -9,17 +9,6 @@ import (
 	"hash"
 )
 
-//(EprivR, EpubR):=DH-Generate()
-// Cr := Kdf1(Cr,EpubR)
-// msg.ephemeral := EpubR
-// Hr := Hash(Hr ∥ msg.ephemeral)
-// Cr := Kdf1(Cr,DH(EprivR)
-// Cr := Kdf1(Cr,DH(EprivR)
-// (Cr,τ,κ) := Kdf3(Cr,Q)
-// Hr := Hash(Hr ∥ τ)
-// msg.empty := Aead(κ,0,ϵ,Hr)
-// Hr := Hash(Hr ∥ msg.empty)
-
 func HASH(sum *[blake2s.Size]byte, input ...[]byte) {
 	h, _ := blake2s.New256(nil)
 	for _, data := range input {
