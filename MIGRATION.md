@@ -193,6 +193,10 @@ side of the handshake, send the response, establish a session. Keep the lock
 scope tight: decode and crypto happen outside the mutex, only table lookup and
 state mutation happen inside it.
 
+Keep the plaintext side behind a channel or a small `PacketSink` trait rather
+than hardcoding what happens to a decrypted payload. Here the far end of that
+boundary is the test harness; in M9 it becomes the TUN device.
+
 **Test:** manual — point a real `wg` client at it and confirm the handshake
 completes. Automated smoke test lands in S13.
 
@@ -250,3 +254,77 @@ cookie is rejected after 120s on the injectable clock.
 output, fill in the README Build/Usage sections that currently say TBA, mark
 WireGuard as supported-minus-TUN, and record the interop procedure against a
 real `wg` peer.
+
+---
+
+## M9 — TUN device (optional, after M8)
+
+Out of the original scope, kept as a follow-on. M1–M8 build the *encrypted* side
+of the daemon — UDP in, UDP out, crypto in the middle. M9 adds the *plaintext*
+side: real IP packets from a kernel TUN interface. Nothing in the handshake,
+session or replay code changes.
+
+Blocking IO pays off here. A TUN device is a file descriptor; it gets a third
+thread and a blocking `read()`. Under an async runtime the fd would have to be
+registered for readiness, which is the machinery this project is deliberately
+avoiding.
+
+**Prerequisite, and the reason this section exists now:** S12 must keep the
+plaintext side behind a boundary — a channel or a small `PacketSink` trait —
+rather than hardcoding what happens to a decrypted payload. With that boundary
+M9 is additive; without it M9 starts by refactoring the daemon core.
+
+Everything here needs `CAP_NET_ADMIN` (root, or `setcap cap_net_admin+ep` on the
+binary), so unlike M1–M8 these tests cannot run unprivileged. Two peers on one
+host need network namespaces, since each end wants its own TUN and routing
+table. Verify `ip netns` works under WSL2 before committing to that test setup.
+
+### [T1](https://github.com/grambbledook/SimpleVPN/issues/18). Open the TUN device
+`/dev/net/tun`, `ioctl(TUNSETIFF)` with `IFF_TUN | IFF_NO_PI`, blocking
+read/write on its own thread. Hand-rolled with `libc` — about 40 lines, and the
+same reason this repo writes WireGuard instead of linking boringtun.
+
+`IFF_TUN` gives raw IP packets rather than ethernet frames; `IFF_NO_PI` drops the
+4-byte packet-info prefix that would otherwise lead every read.
+
+**Test:** create the interface, `ip addr add` + `ip link set up`, ping the
+subnet, and assert the bytes arriving are an ICMP echo request.
+
+### [T2](https://github.com/grambbledook/SimpleVPN/issues/19). IP header parsing
+Extract source and destination only — no full header validation.
+IPv4: version nibble at byte 0, addresses at bytes 12..16 and 16..20.
+IPv6: addresses at bytes 8..24 and 24..40.
+
+**Test:** captured v4 and v6 packets, plus rejection of a truncated header and of
+a version nibble that is neither 4 nor 6.
+
+### [T3](https://github.com/grambbledook/SimpleVPN/issues/20). AllowedIPs trie
+Prefix trie mapping an IP range to a peer, longest-prefix wins. Populated from
+the `AllowedIPs` config field parsed back in S11.
+
+**Test:** longest-prefix beats shorter, `0.0.0.0/0` catch-all, v4 and v6 kept
+separate, no match returns nothing rather than a default peer.
+
+### [T4](https://github.com/grambbledook/SimpleVPN/issues/21). Cryptokey routing — wire both directions
+Outbound: tun read → dst lookup → peer session → encrypt → UDP send.
+Inbound: UDP recv → decrypt → **check the inner source address against the
+sending peer's AllowedIPs** → tun write.
+
+That inbound check is the point of the milestone. A packet that decrypts
+correctly can still be lying about where it came from; without the check any
+authenticated peer can spoof any source address through the tunnel. This is what
+separates WireGuard's model from "authenticate, then forward whatever arrives".
+
+**Test:** two daemons in separate network namespaces, ping across the tunnel. Then
+a negative test — a peer sends a packet whose inner source is outside its own
+AllowedIPs, and it is dropped.
+
+### [T5](https://github.com/grambbledook/SimpleVPN/issues/22). MTU and setup
+`Address =` and `MTU =` config fields, default MTU 1420, and a wg-quick-style
+setup script.
+
+1420 is not arbitrary: 1500 − 48 (outer IPv6 + UDP) − 32 (16-byte transport
+header + 16-byte Poly1305 tag) = 1420. Deriving it is part of the exercise.
+
+**Test:** a payload at exactly the MTU passes; one over it is handled rather than
+silently truncated.
