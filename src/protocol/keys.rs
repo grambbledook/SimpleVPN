@@ -1,15 +1,15 @@
+use crate::protocol::consts::{
+    COOKIE_NONCE_SIZE, PRIVATE_KEY_SIZE, PUBLIC_KEY_SIZE, SHARED_SECRET_SIZE,
+};
 use x25519_dalek::{PublicKey as DalekPublicKey, StaticSecret as DalekStaticSecret};
-pub const PUBLIC_KEY_SIZE: usize = 32;
-pub const PRIVATE_KEY_SIZE: usize = 32;
-pub const SHARED_SECRET_SIZE: usize = 32;
-pub const RESERVED_SPACE_SIZE: usize = 3;
-pub const TAI_64_NANO_TIMESTAMP_SIZE: usize = 12;
-pub const COOKIE_NONCE_SIZE: usize = 24;
-pub const COOKIE_SIZE: usize = 16;
 
+#[cfg_attr(test, derive(Debug))]
 pub struct PrivateKey([u8; PRIVATE_KEY_SIZE]);
+#[cfg_attr(test, derive(Debug))]
 pub struct PublicKey([u8; PUBLIC_KEY_SIZE]);
+#[cfg_attr(test, derive(Debug, PartialEq, Eq))]
 pub struct SharedSecret([u8; SHARED_SECRET_SIZE]);
+#[cfg_attr(test, derive(Debug))]
 pub struct CookieNonce([u8; COOKIE_NONCE_SIZE]);
 
 pub type KeyError = std::io::Error;
@@ -37,5 +37,33 @@ impl PrivateKey {
             ));
         }
         return Result::Ok(SharedSecret(ss.to_bytes()));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_ecdh() {
+        let alice_sk = PrivateKey::generate();
+        let bob_sk = PrivateKey::generate();
+
+        println!("Alice's private key: {:02x?}", alice_sk);
+        println!("Bob's private key: {:02x?}", bob_sk);
+
+        let alice_pk = alice_sk.public_key();
+        let bob_pk = bob_sk.public_key();
+
+        println!("Alice's public key: {:02x?}", alice_pk);
+        println!("Bob's public key: {:02x?}", bob_pk);
+
+        let alice_ss = alice_sk.shared_secret(&bob_pk).unwrap();
+        let bob_ss = bob_sk.shared_secret(&alice_pk).unwrap();
+
+        println!("Alice's shared secret: {:02x?}", alice_ss);
+        println!("Bob's shared secret: {:02x?}", bob_ss);
+
+        assert_eq!(alice_ss, bob_ss, "Shared secrets do not match");
     }
 }
