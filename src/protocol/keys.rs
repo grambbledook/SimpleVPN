@@ -5,7 +5,7 @@ use x25519_dalek::{PublicKey as DalekPublicKey, StaticSecret as DalekStaticSecre
 
 #[cfg_attr(test, derive(Debug))]
 pub struct PrivateKey([u8; PRIVATE_KEY_SIZE]);
-#[cfg_attr(test, derive(Debug))]
+#[cfg_attr(test, derive(Debug, PartialEq, Eq))]
 pub struct PublicKey([u8; PUBLIC_KEY_SIZE]);
 #[cfg_attr(test, derive(Debug, PartialEq, Eq))]
 pub struct SharedSecret([u8; SHARED_SECRET_SIZE]);
@@ -13,6 +13,18 @@ pub struct SharedSecret([u8; SHARED_SECRET_SIZE]);
 pub struct CookieNonce([u8; COOKIE_NONCE_SIZE]);
 
 pub type KeyError = std::io::Error;
+
+impl From<[u8; PRIVATE_KEY_SIZE]> for PrivateKey {
+    fn from(bytes: [u8; PRIVATE_KEY_SIZE]) -> Self {
+        PrivateKey(bytes)
+    }
+}
+
+impl From<[u8; PUBLIC_KEY_SIZE]> for PublicKey {
+    fn from(bytes: [u8; PUBLIC_KEY_SIZE]) -> Self {
+        PublicKey(bytes)
+    }
+}
 
 impl PrivateKey {
     pub fn generate() -> Self {
@@ -42,6 +54,8 @@ impl PrivateKey {
 
 #[cfg(test)]
 mod tests {
+    use crate::protocol::base64::from_64;
+
     use super::*;
 
     #[test]
@@ -65,5 +79,25 @@ mod tests {
         println!("Bob's shared secret: {:02x?}", bob_ss);
 
         assert_eq!(alice_ss, bob_ss, "Shared secrets do not match");
+    }
+
+    #[test]
+    fn test_private_key_parsing_and_derivation() {
+        let original_sk = "WEGlnZqW7a3J+AmKoDg+/L95sSIutu9ApEp3AY+l30o=";
+        let original_pk = "pMo33VR8Lwi0nmi3sAFTFttomPI71LSMkEjFXws94wU=";
+
+        let sk_bytes: [u8; PRIVATE_KEY_SIZE] = from_64(original_sk)
+            .expect("private key is not 32 bytes")
+            .try_into()
+            .expect("private key is not 32 bytes");
+        let sk = PrivateKey::from(sk_bytes);
+
+        let pk_bytes: [u8; PUBLIC_KEY_SIZE] = from_64(original_pk)
+            .expect("public key is not 32 bytes")
+            .try_into()
+            .expect("public key is not 32 bytes");
+        let pk = PublicKey::from(pk_bytes);
+
+        assert_eq!(sk.public_key(), pk, "Public keys do not match");
     }
 }
