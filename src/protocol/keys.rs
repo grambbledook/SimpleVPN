@@ -2,14 +2,19 @@ use crate::protocol::consts::{
     COOKIE_NONCE_SIZE, PRIVATE_KEY_SIZE, PUBLIC_KEY_SIZE, SHARED_SECRET_SIZE,
 };
 use x25519_dalek::{PublicKey as DalekPublicKey, StaticSecret as DalekStaticSecret};
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
-#[cfg_attr(test, derive(Debug))]
+#[derive(Zeroize, ZeroizeOnDrop)]
+#[cfg_attr(test, derive(Debug, PartialEq, Eq))]
 pub struct PrivateKey([u8; PRIVATE_KEY_SIZE]);
+#[derive(Zeroize, ZeroizeOnDrop)]
 #[cfg_attr(test, derive(Debug, PartialEq, Eq))]
 pub struct PublicKey([u8; PUBLIC_KEY_SIZE]);
+#[derive(Zeroize, ZeroizeOnDrop)]
 #[cfg_attr(test, derive(Debug, PartialEq, Eq))]
 pub struct SharedSecret([u8; SHARED_SECRET_SIZE]);
-#[cfg_attr(test, derive(Debug))]
+#[derive(Zeroize, ZeroizeOnDrop)]
+#[cfg_attr(test, derive(Debug, PartialEq, Eq))]
 pub struct CookieNonce([u8; COOKIE_NONCE_SIZE]);
 
 pub type KeyError = std::io::Error;
@@ -82,22 +87,18 @@ mod tests {
     }
 
     #[test]
-    fn test_private_key_parsing_and_derivation() {
+    fn test_private_key_parsing_and_derivation() -> Result<(), Box<dyn std::error::Error>> {
         let original_sk = "WEGlnZqW7a3J+AmKoDg+/L95sSIutu9ApEp3AY+l30o=";
         let original_pk = "pMo33VR8Lwi0nmi3sAFTFttomPI71LSMkEjFXws94wU=";
 
-        let sk_bytes: [u8; PRIVATE_KEY_SIZE] = from_64(original_sk)
-            .expect("private key is not 32 bytes")
-            .try_into()
-            .expect("private key is not 32 bytes");
-        let sk = PrivateKey::from(sk_bytes);
+        let sk_bytes: [u8; PRIVATE_KEY_SIZE] = from_64(original_sk)?[..].try_into()?;
+        let pk_bytes: [u8; PUBLIC_KEY_SIZE] = from_64(original_pk)?[..].try_into()?;
 
-        let pk_bytes: [u8; PUBLIC_KEY_SIZE] = from_64(original_pk)
-            .expect("public key is not 32 bytes")
-            .try_into()
-            .expect("public key is not 32 bytes");
+        let sk = PrivateKey::from(sk_bytes);
         let pk = PublicKey::from(pk_bytes);
 
         assert_eq!(sk.public_key(), pk, "Public keys do not match");
+
+        Ok(())
     }
 }
