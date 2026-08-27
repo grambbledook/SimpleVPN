@@ -1,6 +1,11 @@
+use std::io::ErrorKind;
+use std::str::FromStr;
+
 use crate::protocol::consts::{
     COOKIE_NONCE_SIZE, PRIVATE_KEY_SIZE, PUBLIC_KEY_SIZE, SHARED_SECRET_SIZE,
 };
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD;
 use x25519_dalek::{PublicKey as DalekPublicKey, StaticSecret as DalekStaticSecret};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
@@ -22,6 +27,29 @@ pub type KeyError = std::io::Error;
 impl From<[u8; PRIVATE_KEY_SIZE]> for PrivateKey {
     fn from(bytes: [u8; PRIVATE_KEY_SIZE]) -> Self {
         PrivateKey::clamped(bytes)
+    }
+}
+
+fn decode_key<const N: usize>(s: &str, what: &str) -> Result<[u8; N], KeyError> {
+    STANDARD
+        .decode(s)
+        .map_err(|e| KeyError::new(ErrorKind::InvalidData, e))?
+        .as_slice()
+        .try_into()
+        .map_err(|_| KeyError::new(ErrorKind::InvalidData, format!("{what} must be {N} bytes")))
+}
+
+impl FromStr for PrivateKey {
+    type Err = KeyError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(PrivateKey::clamped(decode_key(s, "private key")?))
+    }
+}
+
+impl FromStr for PublicKey {
+    type Err = KeyError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(PublicKey(decode_key(s, "public key")?))
     }
 }
 
@@ -71,8 +99,6 @@ impl PrivateKey {
 
 #[cfg(test)]
 mod tests {
-    use crate::protocol::base64::from_64;
-
     use super::*;
 
     #[test]
@@ -103,11 +129,8 @@ mod tests {
         let original_sk = "WEGlnZqW7a3J+AmKoDg+/L95sSIutu9ApEp3AY+l30o=";
         let original_pk = "pMo33VR8Lwi0nmi3sAFTFttomPI71LSMkEjFXws94wU=";
 
-        let sk_bytes: [u8; PRIVATE_KEY_SIZE] = from_64(original_sk)?[..].try_into()?;
-        let pk_bytes: [u8; PUBLIC_KEY_SIZE] = from_64(original_pk)?[..].try_into()?;
-
-        let sk = PrivateKey::from(sk_bytes);
-        let pk = PublicKey::from(pk_bytes);
+        let sk = PrivateKey::from_str(original_sk)?;
+        let pk = PublicKey::from_str(original_pk)?;
 
         assert_eq!(sk.public_key(), pk, "Public keys do not match");
 
