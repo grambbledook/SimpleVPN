@@ -1,5 +1,4 @@
 use std::io::ErrorKind;
-use std::str::FromStr;
 
 use crate::protocol::consts::{
     COOKIE_NONCE_SIZE, PRIVATE_KEY_SIZE, PUBLIC_KEY_SIZE, SHARED_SECRET_SIZE,
@@ -39,17 +38,26 @@ fn decode_key<const N: usize>(s: &str, what: &str) -> Result<[u8; N], KeyError> 
         .map_err(|_| KeyError::new(ErrorKind::InvalidData, format!("{what} must be {N} bytes")))
 }
 
-impl FromStr for PrivateKey {
-    type Err = KeyError;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(PrivateKey::clamped(decode_key(s, "private key")?))
+pub trait Base64: Sized {
+    fn to_base64(&self) -> String;
+    fn from_base64(s: &str) -> Result<Self, KeyError>;
+}
+
+impl Base64 for PublicKey {
+    fn to_base64(&self) -> String {
+        STANDARD.encode(self.0)
+    }
+    fn from_base64(s: &str) -> Result<Self, KeyError> {
+        Ok(PublicKey(decode_key(s, "public key")?))
     }
 }
 
-impl FromStr for PublicKey {
-    type Err = KeyError;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(PublicKey(decode_key(s, "public key")?))
+impl Base64 for PrivateKey {
+    fn to_base64(&self) -> String {
+        STANDARD.encode(self.0)
+    }
+    fn from_base64(s: &str) -> Result<Self, KeyError> {
+        Ok(PrivateKey(decode_key(s, "private key")?))
     }
 }
 
@@ -62,10 +70,14 @@ impl From<[u8; PUBLIC_KEY_SIZE]> for PublicKey {
 impl PrivateKey {
     /// Curve25519 clamping (RFC 7748 §5, `decodeScalar25519`).
     ///
-    /// x25519-dalek clamps internally on every multiplication, so this does not
-    /// change the derived public key or the shared secret. It is done here so
-    /// the stored bytes are always a valid scalar, matching the Go
-    /// implementation, whose PrivateKey is clamped at construction.
+    /// x25519-dalek clamps internally on every scalar multiplication, so this
+    /// affects neither the derived public key nor the shared secret. It runs on
+    /// the two paths that mint a key from arbitrary bytes — `generate` and
+    /// `From<[u8; PRIVATE_KEY_SIZE]>` — so that what we store is the scalar the
+    /// key will actually be used as, the same point at which Go clamps.
+    ///
+    /// `from_base64` deliberately skips it, so a parsed key re-encodes to the
+    /// string it came from. Go's `FromBase64` does not clamp either.
     fn clamped(mut sk: [u8; PRIVATE_KEY_SIZE]) -> Self {
         sk[0] &= 248;
         sk[31] = (sk[31] & 127) | 64;
@@ -74,7 +86,7 @@ impl PrivateKey {
 
     pub fn generate() -> Self {
         let mut sk = [0u8; PRIVATE_KEY_SIZE];
-        getrandom::fill(&mut sk).expect("failed to genersate the token");
+        getrandom::fill(&mut sk).expect("failed to genersate the key");
         Self::clamped(sk)
     }
 
@@ -93,7 +105,7 @@ impl PrivateKey {
                 "bad input point: low order point",
             ));
         }
-        return Result::Ok(SharedSecret(ss.to_bytes()));
+        Result::Ok(SharedSecret(ss.to_bytes()))
     }
 }
 
@@ -129,10 +141,16 @@ mod tests {
         let original_sk = "WEGlnZqW7a3J+AmKoDg+/L95sSIutu9ApEp3AY+l30o=";
         let original_pk = "pMo33VR8Lwi0nmi3sAFTFttomPI71LSMkEjFXws94wU=";
 
-        let sk = PrivateKey::from_str(original_sk)?;
-        let pk = PublicKey::from_str(original_pk)?;
+        let sk = PrivateKey::from_base64(original_sk)?;
+        let pk = PublicKey::from_base64(original_pk)?;
 
         assert_eq!(sk.public_key(), pk, "Public keys do not match");
+        assert_eq!(sk.to_base64(), original_sk, "SKeys does not match");
+        assert_eq!(
+            sk.public_key().to_base64(),
+            original_pk,
+            "PKeys does not match"
+        );
 
         Ok(())
     }
