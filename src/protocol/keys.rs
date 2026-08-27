@@ -21,7 +21,7 @@ pub type KeyError = std::io::Error;
 
 impl From<[u8; PRIVATE_KEY_SIZE]> for PrivateKey {
     fn from(bytes: [u8; PRIVATE_KEY_SIZE]) -> Self {
-        PrivateKey(bytes)
+        PrivateKey::clamped(bytes)
     }
 }
 
@@ -32,10 +32,22 @@ impl From<[u8; PUBLIC_KEY_SIZE]> for PublicKey {
 }
 
 impl PrivateKey {
+    /// Curve25519 clamping (RFC 7748 §5, `decodeScalar25519`).
+    ///
+    /// x25519-dalek clamps internally on every multiplication, so this does not
+    /// change the derived public key or the shared secret. It is done here so
+    /// the stored bytes are always a valid scalar, matching the Go
+    /// implementation, whose PrivateKey is clamped at construction.
+    fn clamped(mut sk: [u8; PRIVATE_KEY_SIZE]) -> Self {
+        sk[0] &= 248;
+        sk[31] = (sk[31] & 127) | 64;
+        PrivateKey(sk)
+    }
+
     pub fn generate() -> Self {
         let mut sk = [0u8; PRIVATE_KEY_SIZE];
         getrandom::fill(&mut sk).expect("failed to genersate the token");
-        PrivateKey(sk)
+        Self::clamped(sk)
     }
 
     pub fn public_key(&self) -> PublicKey {
