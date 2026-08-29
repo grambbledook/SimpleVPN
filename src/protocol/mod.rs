@@ -1,3 +1,3 @@
 pub mod consts;
-pub mod crypto;
+pub mod kdf;
 pub mod keys;
