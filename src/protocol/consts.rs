@@ -6,5 +6,6 @@ pub const SHARED_SECRET_SIZE: usize = 32;
 
 pub const RESERVED_SPACE_SIZE: usize = 3;
 pub const TAI_64_NANO_TIMESTAMP_SIZE: usize = 12;
+pub const TAI_64_NANO_TIMESTAMP_OFFSET: u64 = (1 << 62) + 10;
 pub const COOKIE_NONCE_SIZE: usize = 24;
 pub const COOKIE_SIZE: usize = 16;
